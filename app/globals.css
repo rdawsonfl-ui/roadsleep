@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap');
+
+:root {
+  --asphalt: #1a1a1a;
+  --asphalt-light: #2a2a2a;
+  --stripe: #f5c842;
+  --green: #2c6e49;
+  --green-light: #4a9e70;
+  --sand: #f5f0e8;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --font-display: 'Barlow Condensed', sans-serif;
+  --font-body: 'Barlow', sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: var(--font-display); }
+
+.road-stripe {
+  height: 6px;
+  background: var(--asphalt);
+  position: relative;
+  overflow: hidden;
+}
+.road-stripe::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent 0px, transparent 30px,
+    var(--stripe) 30px, var(--stripe) 60px,
+    transparent 60px, transparent 90px
+  );
+  animation: stripe-move 1s linear infinite;
+}
+@keyframes stripe-move {
+  from { transform: translateX(0); }
+  to { transform: translateX(90px); }
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
