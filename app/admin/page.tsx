@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase, type Hotel, type Interstate } from '@/lib/supabase'
 import AdminGate from './AdminGate'
 
-type Tab = 'hotels' | 'interstates'
+type Tab = 'hotels' | 'interstates' | 'hoteliers'
 
 const AMENITY_OPTIONS = [
   { key: 'truck_parking', label: '🚛 Truck Parking' },
@@ -24,6 +24,8 @@ function AdminPageContent() {
   const [hotels, setHotels] = useState<any[]>([])
   const [interstates, setInterstates] = useState<Interstate[]>([])
   const [exits, setExits] = useState<any[]>([])
+  const [hoteliers, setHoteliers] = useState<any[]>([])
+  const [hotelierCalls, setHotelierCalls] = useState<Record<string, number>>({})
   const [form, setForm] = useState({ ...emptyHotel })
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -35,12 +37,27 @@ function AdminPageContent() {
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
-    const [{ data: h }, { data: i }, { data: e }] = await Promise.all([
+    const [{ data: h }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
       supabase.from('hotels').select('*, exits(*, interstates(*))').order('created_at', { ascending: false }),
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker'),
+      supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
+      supabase.from('call_logs').select('hotelier_id, called_at'),
     ])
     if (h) setHotels(h); if (i) setInterstates(i); if (e) setExits(e)
+    if (ht) setHoteliers(ht)
+    if (cl) {
+      const now = new Date()
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      const counts: Record<string, number> = {}
+      for (const c of cl) {
+        if (!c.hotelier_id) continue
+        if (new Date(c.called_at) >= monthStart) {
+          counts[c.hotelier_id] = (counts[c.hotelier_id] || 0) + 1
+        }
+      }
+      setHotelierCalls(counts)
+    }
   }
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
@@ -155,7 +172,7 @@ function AdminPageContent() {
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-          {(['hotels', 'interstates'] as Tab[]).map(t => (
+          {(['hotels', 'interstates', 'hoteliers'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none',
               color: tab === t ? 'var(--amber)' : 'var(--fog)',
@@ -163,7 +180,7 @@ function AdminPageContent() {
               padding: '10px 4px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', marginBottom: '-1px',
             }}>
-              {t === 'hotels' ? '🏨 Hotels' : '🛣️ Interstates & Exits'}
+              {t === 'hotels' ? '🏨 Hotels' : t === 'interstates' ? '🛣️ Interstates & Exits' : '👤 Hoteliers'}
             </button>
           ))}
         </div>
@@ -426,6 +443,85 @@ function AdminPageContent() {
                         style={{ ...btnGhost, color: 'var(--red)' }}>Del</button>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {tab === 'hoteliers' && (
+          <>
+            <div style={{ ...cardStyle, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '14px', fontFamily: 'Syne, sans-serif', color: 'var(--white)' }}>Hoteliers — Billing Overview ({hoteliers.length})</h3>
+              </div>
+              {hoteliers.length === 0 ? (
+                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>No hoteliers signed up yet</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--night3)', fontSize: '10px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.7px' }}>
+                        <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 500 }}>Name / Email</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Billing Type</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Rate</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Calls This Mo.</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Amount Owed</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Status</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 500 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {hoteliers.map(h => {
+                        const calls = hotelierCalls[h.id] || 0
+                        const rate = h.rate || 5
+                        const bType = h.billing_type || 'per_call'
+                        const owed = bType === 'monthly' ? rate : calls * rate
+                        const statusColor = h.billing_status === 'active' ? 'var(--green)' : h.billing_status === 'unpaid' ? 'var(--red)' : 'var(--fog)'
+                        return (
+                          <tr key={h.id} style={{ borderTop: '1px solid var(--border)' }}>
+                            <td style={{ padding: '12px 14px' }}>
+                              <div style={{ color: 'var(--white)', fontWeight: 600 }}>{h.name}</div>
+                              <div style={{ color: 'var(--fog)', fontSize: '11px' }}>{h.email}</div>
+                              {h.business_phone && <div style={{ color: 'var(--fog)', fontSize: '11px' }}>{h.business_phone}</div>}
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                              <select value={bType} onChange={async e => {
+                                await supabase.from('hoteliers').update({ billing_type: e.target.value }).eq('id', h.id); loadAll()
+                              }} style={{ background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--mist)', padding: '4px 8px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                                <option value="per_call">Per Call</option>
+                                <option value="monthly">Monthly</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                                <span style={{ color: 'var(--fog)', fontSize: '12px' }}>$</span>
+                                <input type="number" defaultValue={rate} onBlur={async e => {
+                                  await supabase.from('hoteliers').update({ rate: parseInt(e.target.value) || 5 }).eq('id', h.id); loadAll()
+                                }} style={{ width: '52px', background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--white)', padding: '4px 6px', borderRadius: '6px', fontSize: '12px', textAlign: 'center' }} />
+                                <span style={{ color: 'var(--fog)', fontSize: '11px' }}>{bType === 'per_call' ? '/call' : '/mo'}</span>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center', color: 'var(--white)', fontWeight: 600 }}>{calls}</td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center', color: 'var(--amber)', fontWeight: 700, fontSize: '15px' }}>${owed.toLocaleString()}</td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                              <select value={h.billing_status || 'active'} onChange={async e => {
+                                await supabase.from('hoteliers').update({ billing_status: e.target.value }).eq('id', h.id); loadAll()
+                              }} style={{ background: 'var(--night3)', border: `1px solid ${statusColor}`, color: statusColor, padding: '4px 8px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                                <option value="active">Active</option>
+                                <option value="paused">Paused</option>
+                                <option value="unpaid">Unpaid</option>
+                              </select>
+                            </td>
+                            <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                              <button onClick={async () => { if (confirm(`Delete ${h.name}?`)) { await supabase.from('hoteliers').delete().eq('id', h.id); loadAll() }}}
+                                style={{ ...btnGhost, color: 'var(--red)' }}>Del</button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

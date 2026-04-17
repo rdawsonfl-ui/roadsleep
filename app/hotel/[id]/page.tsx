@@ -40,11 +40,10 @@ export default function HotelPage() {
   const interstate = exit?.interstates
 
   const trackCall = () => {
-    // Fire-and-forget call log insert (don't block the tel: link)
+    // Fire-and-forget — logs call for billing purposes
     supabase.from('call_logs').insert({
       hotel_id: hotel.id,
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
-      referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 200) : null,
+      hotelier_id: (hotel as any).hotelier_id || null,
     }).then(() => {})
   }
 
