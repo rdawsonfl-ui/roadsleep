@@ -12,17 +12,6 @@ const DISTANCES = [
   { value: 9999, label: 'No limit' },
 ]
 
-// Popular starting points for manual selection (covers most US highway corridors)
-const CITY_PRESETS: { label: string; lat: number; lng: number }[] = [
-  { label: 'Cape Coral, FL', lat: 26.5629, lng: -81.9495 },
-  { label: 'Fort Myers, FL', lat: 26.6406, lng: -81.8723 },
-  { label: 'Tampa, FL', lat: 27.9506, lng: -82.4572 },
-  { label: 'Ocala, FL', lat: 29.1872, lng: -82.1401 },
-  { label: 'Jacksonville, FL', lat: 30.3322, lng: -81.6557 },
-  { label: 'Orlando, FL', lat: 28.5383, lng: -81.3792 },
-  { label: 'Atlanta, GA', lat: 33.7490, lng: -84.3880 },
-  { label: 'Nashville, TN', lat: 36.1627, lng: -86.7816 },
-]
 
 export default function Home() {
   const router = useRouter()
@@ -32,9 +21,6 @@ export default function Home() {
   const [locStatus, setLocStatus] = useState<'idle' | 'getting' | 'got' | 'error'>('idle')
   const [coords, setCoords] = useState<{ lat: number; lng: number; source: 'gps' | 'manual' } | null>(null)
   const [locError, setLocError] = useState('')
-  const [showManual, setShowManual] = useState(false)
-  const [manualCity, setManualCity] = useState('')
-
   useEffect(() => {
     supabase.from('interstates').select('*').eq('is_active', true).order('name')
       .then(({ data }) => { if (data) setInterstates(data) })
@@ -45,7 +31,6 @@ export default function Home() {
   function requestLocation() {
     if (!navigator.geolocation) {
       setLocStatus('error'); setLocError('Geolocation not supported on this device')
-      setShowManual(true)
       return
     }
     setLocStatus('getting')
@@ -57,17 +42,11 @@ export default function Home() {
       err => {
         setLocStatus('error')
         setLocError(err.code === 1 ? 'Location blocked' : 'Couldn\'t get location')
-        setShowManual(true)
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
 
-  function pickCity(c: { label: string; lat: number; lng: number }) {
-    setCoords({ lat: c.lat, lng: c.lng, source: 'manual' })
-    setLocStatus('got')
-    setManualCity(c.label)
-  }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -119,10 +98,10 @@ export default function Home() {
                 <span>✓</span>
                 {coords.source === 'gps' 
                   ? <>GPS locked · {coords.lat.toFixed(2)}°, {coords.lng.toFixed(2)}°</>
-                  : <>Using: {manualCity || 'custom location'}</>
+                  : <>Location set</>
                 }
               </span>
-              <button type="button" onClick={() => { setShowManual(true); setCoords(null); setLocStatus('idle') }}
+              <button type="button" onClick={() => { setCoords(null); setLocStatus('idle'); requestLocation() }}
                 style={{ background: 'none', border: 'none', color: 'var(--fog)', fontSize: '11px', cursor: 'pointer', textDecoration: 'underline' }}>
                 change
               </button>
@@ -134,7 +113,7 @@ export default function Home() {
               borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: 'var(--amber)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
             }}>
-              <span>📍 {locError} — pick a starting city below</span>
+              <span>📍 {locError} — please enable GPS</span>
               <button type="button" onClick={requestLocation} style={{
                 background: 'var(--amber)', color: 'var(--night)', border: 'none',
                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
@@ -144,26 +123,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Manual city picker (shown when GPS fails OR user clicks "change") */}
-      {(showManual && !coords) && (
-        <section style={{ padding: '0 20px 16px' }}>
-          <div style={{ maxWidth: '440px', margin: '0 auto', background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px 16px' }}>
-            <label className="dark-label" style={{ marginBottom: '8px' }}>Or pick a starting city</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {CITY_PRESETS.map(c => (
-                <button key={c.label} type="button" onClick={() => pickCity(c)}
-                  style={{
-                    background: 'var(--night3)', color: 'var(--mist)', border: '1px solid var(--border)',
-                    padding: '6px 12px', borderRadius: '16px', fontSize: '12px', cursor: 'pointer', fontWeight: 500,
-                    transition: 'all 0.15s',
-                  }}>
-                  📍 {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* Search Card */}
       <section style={{ padding: '0 20px 40px' }}>
