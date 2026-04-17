@@ -1,70 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@300;400;500;600&display=swap');
 
 :root {
-  --asphalt: #1a1a1a;
-  --asphalt-light: #2a2a2a;
-  --stripe: #f5c842;
-  --green: #2c6e49;
-  --green-light: #4a9e70;
-  --sand: #f5f0e8;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --font-display: 'Barlow Condensed', sans-serif;
-  --font-body: 'Barlow', sans-serif;
+  --night: #0d0f14;
+  --night2: #14171f;
+  --night3: #1c2030;
+  --night4: #252a3a;
+  --steel: #3a4155;
+  --fog: #8a93a8;
+  --mist: #b8c0cc;
+  --white: #f0f2f7;
+  --amber: #f5a623;
+  --amber2: #e8941a;
+  --green: #3ecf8e;
+  --red: #ff6b6b;
+  --blue: #4fa3e0;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
 }
 
-body {
-  font-family: var(--font-body);
+html, body {
+  background: var(--night);
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
-.font-display { font-family: var(--font-display); }
+.font-display { font-family: 'Syne', sans-serif; letter-spacing: -0.5px; }
 
-.road-stripe {
-  height: 6px;
-  background: var(--asphalt);
-  position: relative;
-  overflow: hidden;
-}
-.road-stripe::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent 0px, transparent 30px,
-    var(--stripe) 30px, var(--stripe) 60px,
-    transparent 60px, transparent 90px
-  );
-  animation: stripe-move 1s linear infinite;
-}
-@keyframes stripe-move {
-  from { transform: translateX(0); }
-  to { transform: translateX(90px); }
+.glow-amber {
+  box-shadow: 0 0 24px rgba(245,166,35,0.25);
 }
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+input, select, textarea {
+  background: var(--night3);
+  color: var(--white);
+  border: 1px solid var(--border);
 }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--amber);
+}
+select option { background: var(--night2); color: var(--white); }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
-}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

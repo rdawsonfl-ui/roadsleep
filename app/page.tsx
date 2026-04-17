@@ -2,13 +2,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Interstate } from '@/lib/supabase'
+import Nav from '@/components/Nav'
 
-const DIRECTIONS = [
-  { code: 'N', label: 'Northbound' },
-  { code: 'S', label: 'Southbound' },
-  { code: 'E', label: 'Eastbound' },
-  { code: 'W', label: 'Westbound' },
-]
+const DIRS = ['N','S','E','W']
 
 export default function Home() {
   const router = useRouter()
@@ -29,104 +25,118 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#f5f0e8' }}>
-      <header style={{ background: '#1a1a1a' }} className="px-6 py-4 flex items-center justify-between">
-        <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '28px', fontWeight: 800, color: 'white', letterSpacing: '0.05em' }}>
-          ROAD<span style={{ color: '#f5c842' }}>SLEEP</span>
+    <div style={{ background: '#0d0f14', minHeight: '100vh' }}>
+      <Nav />
+
+      {/* Hero */}
+      <div style={{ background: 'linear-gradient(180deg, rgba(245,166,35,0.04) 0%, transparent 100%)' }}
+           className="px-5 pt-10 pb-8 text-center">
+        <div className="inline-block text-[10px] font-medium uppercase tracking-[0.15em] px-3 py-1 rounded-full mb-4"
+             style={{ background: 'rgba(245,166,35,0.12)', color: '#f5a623', border: '1px solid rgba(245,166,35,0.25)' }}>
+          Find Hotels by Mile Marker
         </div>
-        <a href="/admin" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Admin ›</a>
-      </header>
-      <div className="road-stripe" />
+        <h1 className="font-display font-extrabold leading-[1.05] mb-2" style={{ fontSize: '38px', letterSpacing: '-1px', color: '#f0f2f7' }}>
+          Sleep anywhere<br/>on the highway.
+        </h1>
+        <p className="text-sm" style={{ color: '#8a93a8' }}>
+          Mom-and-pop motels, mile-marker search, tap to call.
+        </p>
+      </div>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 text-center">
-            <svg viewBox="0 0 320 72" className="w-full max-w-xs mx-auto mb-5">
-              <rect width="320" height="72" fill="#555" rx="6"/>
-              {[0,1,2,3,4,5,6].map(i => (
-                <rect key={i} x={i*48+4} y="32" width="32" height="8" rx="2" fill="#f5c842" opacity="0.85"/>
-              ))}
-              <rect x="118" y="14" width="84" height="32" rx="4" fill="#2c6e49"/>
-              <rect x="118" y="22" width="26" height="24" rx="3" fill="#1a4a30"/>
-              <circle cx="133" cy="50" r="7" fill="#1a1a1a"/><circle cx="133" cy="50" r="3" fill="#555"/>
-              <circle cx="188" cy="50" r="7" fill="#1a1a1a"/><circle cx="188" cy="50" r="3" fill="#555"/>
-            </svg>
-            <h1 style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '38px', fontWeight: 800, lineHeight: 1.1 }} className="text-gray-900 mb-2">
-              FIND YOUR NEXT STOP
-            </h1>
-            <p className="text-gray-500 text-sm">Hotels by mile marker · No booking · Just call</p>
-          </div>
+      {/* Search card */}
+      <div className="px-5 pb-10 max-w-md mx-auto">
+        <form onSubmit={handleSearch}
+              style={{ background: '#14171f', border: '1px solid rgba(255,255,255,0.07)' }}
+              className="rounded-2xl overflow-hidden">
+          <div className="p-5 space-y-4">
+            <div>
+              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] mb-1.5" style={{ color: '#8a93a8' }}>
+                Interstate
+              </label>
+              <select
+                value={form.interstate}
+                onChange={e => setForm(f => ({ ...f, interstate: e.target.value }))}
+                className="w-full rounded-lg px-3.5 py-3 text-sm"
+                style={{ background: '#1c2030', color: '#f0f2f7', border: '1px solid rgba(255,255,255,0.07)' }}
+                required
+              >
+                <option value="">Select interstate…</option>
+                {interstates.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </select>
+            </div>
 
-          <form onSubmit={handleSearch} className="bg-white rounded-2xl shadow-lg overflow-hidden">
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Interstate</label>
-                <select
-                  value={form.interstate}
-                  onChange={e => setForm(f => ({ ...f, interstate: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 bg-gray-50"
-                  
-                  required
-                >
-                  <option value="">Select interstate...</option>
-                  {interstates.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Direction</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {DIRECTIONS.map(d => (
-                    <button key={d.code} type="button"
-                      onClick={() => setForm(f => ({ ...f, direction: d.code }))}
-                      className="py-3 rounded-xl text-sm font-bold transition-all"
+            <div>
+              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] mb-1.5" style={{ color: '#8a93a8' }}>
+                Direction
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {DIRS.map(d => {
+                  const active = form.direction === d
+                  return (
+                    <button key={d} type="button"
+                      onClick={() => setForm(f => ({ ...f, direction: d }))}
+                      className="py-3 rounded-lg text-sm font-bold font-display transition-all"
                       style={{
-                        background: form.direction === d.code ? '#2c6e49' : '#f3f4f6',
-                        color: form.direction === d.code ? 'white' : '#6b7280',
-                        fontFamily: 'Barlow Condensed, sans-serif',
-                        fontSize: '16px',
-                        letterSpacing: '0.05em'
-                      }}
-                    >{d.code}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mile Marker</label>
-                <input
-                  type="number" placeholder="e.g. 142"
-                  value={form.mile_marker}
-                  onChange={e => setForm(f => ({ ...f, mile_marker: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm focus:outline-none bg-gray-50"
-                  min="0" required
-                />
-                <p className="text-xs text-gray-400 mt-1.5">Shows hotels within 10 miles</p>
+                        background: active ? '#f5a623' : '#1c2030',
+                        color: active ? '#0d0f14' : '#8a93a8',
+                        border: `1px solid ${active ? '#f5a623' : 'rgba(255,255,255,0.07)'}`,
+                      }}>
+                      {d}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full py-4 text-white font-black text-xl transition-all disabled:opacity-60"
-              style={{ background: '#2c6e49', fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}>
-              {loading ? 'SEARCHING...' : '🛣️  FIND HOTELS'}
-            </button>
-          </form>
+            <div>
+              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] mb-1.5" style={{ color: '#8a93a8' }}>
+                Mile Marker
+              </label>
+              <input
+                type="number" placeholder="e.g. 142"
+                value={form.mile_marker}
+                onChange={e => setForm(f => ({ ...f, mile_marker: e.target.value }))}
+                className="w-full rounded-lg px-3.5 py-3 text-sm"
+                style={{ background: '#1c2030', color: '#f0f2f7', border: '1px solid rgba(255,255,255,0.07)' }}
+                min="0" required
+              />
+              <p className="text-[11px] mt-1.5" style={{ color: '#8a93a8' }}>Shows hotels within 10 miles</p>
+            </div>
+          </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-            {[['🚛','Truck Parking'],['🐾','Pet Friendly'],['🌙','24hr Check-in']].map(([icon, label]) => (
-              <div key={label} className="bg-white rounded-xl p-3 shadow-sm">
-                <div className="text-xl mb-1">{icon}</div>
-                <div className="text-xs text-gray-500 font-medium">{label}</div>
-              </div>
-            ))}
+          <button type="submit" disabled={loading}
+            className="w-full py-4 font-display font-bold text-base tracking-wide transition-all disabled:opacity-60"
+            style={{ background: '#f5a623', color: '#0d0f14', letterSpacing: '0.02em' }}>
+            {loading ? 'Searching…' : 'Find Hotels →'}
+          </button>
+        </form>
+
+        {/* Feature pills */}
+        <div className="grid grid-cols-3 gap-2 mt-5">
+          {[
+            { icon: '🛻', label: 'Truck parking' },
+            { icon: '🐾', label: 'Pet friendly' },
+            { icon: '🌙', label: '24hr check-in' },
+          ].map(f => (
+            <div key={f.label}
+                 style={{ background: '#14171f', border: '1px solid rgba(255,255,255,0.07)' }}
+                 className="rounded-xl p-3 text-center">
+              <div className="text-lg mb-1">{f.icon}</div>
+              <div className="text-[11px]" style={{ color: '#8a93a8' }}>{f.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tagline */}
+        <div className="mt-8 text-center">
+          <div className="text-[11px] uppercase tracking-[0.15em] mb-2" style={{ color: '#8a93a8' }}>
+            Built for the road
+          </div>
+          <div className="text-sm leading-relaxed" style={{ color: '#b8c0cc' }}>
+            No commissions. No booking apps. Just phone numbers from the highway straight to the motel.
           </div>
         </div>
-      </main>
-
-      <div className="road-stripe" />
-      <footer style={{ background: '#1a1a1a' }} className="text-center py-3">
-        <span style={{ color: '#555', fontSize: '12px' }}>RoadSleep © {new Date().getFullYear()} · Highway Hotels by Mile Marker</span>
-      </footer>
+      </div>
     </div>
   )
 }

@@ -1,31 +1,23 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase, type Hotel, type Interstate } from '@/lib/supabase'
-import { Suspense } from 'react'
+import Nav from '@/components/Nav'
 
 const AMENITY_ICONS: Record<string, string> = {
-  truck_parking: '🚛',
-  pets: '🐾',
-  '24hr_checkin': '🌙',
-  wifi: '📶',
-  pool: '🏊',
+  truck_parking: '🛻', pets: '🐾', '24hr_checkin': '🌙', wifi: '📶', pool: '🏊',
 }
 const AMENITY_LABELS: Record<string, string> = {
-  truck_parking: 'Truck Parking',
-  pets: 'Pets OK',
-  '24hr_checkin': '24hr Check-in',
-  wifi: 'WiFi',
-  pool: 'Pool',
+  truck_parking: 'Truck parking', pets: 'Pets OK', '24hr_checkin': '24hr', wifi: 'WiFi', pool: 'Pool',
 }
 
-const BADGE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  available: { bg: '#dcfce7', color: '#166534', label: 'Available' },
-  limited: { bg: '#fef9c3', color: '#854d0e', label: 'Limited' },
-  full: { bg: '#fee2e2', color: '#991b1b', label: 'Full' },
+const BADGE: Record<string, { dot: string; label: string; color: string }> = {
+  available: { dot: '#3ecf8e', label: 'Likely Available', color: '#3ecf8e' },
+  limited: { dot: '#f5a623', label: 'Maybe Full', color: '#f5a623' },
+  full: { dot: '#ff6b6b', label: 'Often Full', color: '#ff6b6b' },
 }
 
-const FILTERS = ['truck_parking', 'pets', '24hr_checkin']
+const FILTERS = ['truck_parking','pets','24hr_checkin']
 
 function SearchResults() {
   const params = useSearchParams()
@@ -34,21 +26,18 @@ function SearchResults() {
   const direction = params.get('direction')
   const mile = parseFloat(params.get('mile') || '0')
 
-  const [hotels, setHotels] = useState<Hotel[]>([])
+  const [hotels, setHotels] = useState<any[]>([])
   const [interstate, setInterstate] = useState<Interstate | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeFilters, setActiveFilters] = useState<string[]>([])
 
   useEffect(() => {
     if (!interstateId || !direction || !mile) return
-
     async function load() {
       setLoading(true)
-      // Get interstate name
       const { data: iData } = await supabase.from('interstates').select('*').eq('id', interstateId).single()
       if (iData) setInterstate(iData)
 
-      // Find exits within 10 miles
       const { data: exits } = await supabase
         .from('exits')
         .select('id, mile_marker, exit_label, city, state')
@@ -57,8 +46,7 @@ function SearchResults() {
         .gte('mile_marker', mile - 10)
         .lte('mile_marker', mile + 10)
 
-      if (!exits || exits.length === 0) { setHotels([]); setLoading(false); return }
-
+      if (!exits?.length) { setHotels([]); setLoading(false); return }
       const exitIds = exits.map(e => e.id)
       const { data: hotelData } = await supabase
         .from('hotels')
@@ -66,11 +54,12 @@ function SearchResults() {
         .in('exit_id', exitIds)
         .order('featured', { ascending: false })
 
-      // Attach exit data and sort by distance
       const enriched = (hotelData || []).map(h => {
         const exit = exits.find(e => e.id === h.exit_id)
         return { ...h, _distance: exit ? Math.abs(exit.mile_marker - mile) : 99 }
-      }).sort((a, b) => a.featured === b.featured ? a._distance - b._distance : (b.featured ? 1 : -1))
+      }).sort((a, b) =>
+        a.featured === b.featured ? a._distance - b._distance : (b.featured ? 1 : -1)
+      )
 
       setHotels(enriched)
       setLoading(false)
@@ -82,106 +71,140 @@ function SearchResults() {
     activeFilters.length === 0 || activeFilters.every(f => h.amenities?.includes(f))
   )
 
-  const toggleFilter = (f: string) => {
+  const toggle = (f: string) =>
     setActiveFilters(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])
-  }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#f5f0e8' }}>
-      {/* Header */}
-      <header style={{ background: '#1a1a1a' }} className="px-4 py-4 flex items-center gap-3">
-        <button onClick={() => router.push('/')} className="text-gray-400 hover:text-white transition-colors text-xl">←</button>
-        <div>
-          <div style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: '22px', fontWeight: 800, color: 'white', letterSpacing: '0.05em' }}>
-            ROAD<span style={{ color: '#f5c842' }}>SLEEP</span>
-          </div>
-          {interstate && (
-            <div className="text-xs text-gray-400">{interstate.name} · {direction}bound · Mile {mile}</div>
-          )}
-        </div>
-      </header>
-      <div className="road-stripe" />
+    <div style={{ background: '#0d0f14', minHeight: '100vh' }}>
+      <Nav />
 
-      {/* Filters */}
-      <div className="px-4 py-3 bg-white border-b border-gray-100 flex gap-2 overflow-x-auto">
-        {FILTERS.map(f => (
-          <button key={f} onClick={() => toggleFilter(f)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all"
-            style={{
-              background: activeFilters.includes(f) ? '#2c6e49' : '#f3f4f6',
-              color: activeFilters.includes(f) ? 'white' : '#6b7280'
-            }}>
-            {AMENITY_ICONS[f]} {AMENITY_LABELS[f]}
+      {/* Search context strip */}
+      <div style={{ background: '#14171f', borderBottom: '1px solid rgba(255,255,255,0.07)' }}
+           className="px-5 py-3">
+        <div className="flex items-center justify-between max-w-md mx-auto">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.15em]" style={{ color: '#8a93a8' }}>Searching</div>
+            <div className="font-display text-base font-bold mt-0.5" style={{ color: '#f0f2f7' }}>
+              {interstate?.name || '…'} <span style={{ color: '#f5a623' }}>{direction}</span> · MM {mile}
+            </div>
+          </div>
+          <button onClick={() => router.push('/')}
+            className="text-xs font-medium px-3 py-1.5 rounded-md"
+            style={{ color: '#f5a623', background: 'rgba(245,166,35,0.1)' }}>
+            Change
           </button>
-        ))}
-        {activeFilters.length > 0 && (
-          <button onClick={() => setActiveFilters([])} className="px-3 py-1.5 rounded-full text-xs font-semibold text-red-500 bg-red-50 whitespace-nowrap">
-            Clear
-          </button>
-        )}
+        </div>
       </div>
 
-      <main className="flex-1 px-4 py-4 max-w-lg mx-auto w-full">
+      {/* Filters */}
+      <div className="px-5 py-3 max-w-md mx-auto">
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+          {FILTERS.map(f => {
+            const on = activeFilters.includes(f)
+            return (
+              <button key={f} onClick={() => toggle(f)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all"
+                style={{
+                  background: on ? 'rgba(245,166,35,0.15)' : '#14171f',
+                  color: on ? '#f5a623' : '#8a93a8',
+                  border: `1px solid ${on ? 'rgba(245,166,35,0.35)' : 'rgba(255,255,255,0.07)'}`,
+                }}>
+                <span>{AMENITY_ICONS[f]}</span> {AMENITY_LABELS[f]}
+              </button>
+            )
+          })}
+          {activeFilters.length > 0 && (
+            <button onClick={() => setActiveFilters([])}
+              className="px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap"
+              style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.1)' }}>
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      <main className="px-5 pb-12 max-w-md mx-auto">
         {loading ? (
-          <div className="text-center py-16 text-gray-400">
-            <div className="text-4xl mb-3">🛣️</div>
-            <div>Searching nearby hotels...</div>
+          <div className="text-center py-20" style={{ color: '#8a93a8' }}>
+            <div className="text-3xl mb-3">🛣️</div>
+            <div className="text-sm">Searching the road ahead…</div>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-4xl mb-3">😴</div>
-            <div className="font-semibold text-gray-700 mb-1">No hotels found</div>
-            <div className="text-sm text-gray-400">Try adjusting your mile marker or removing filters</div>
-            <button onClick={() => router.push('/')} className="mt-4 px-5 py-2 rounded-xl text-white text-sm font-semibold" style={{ background: '#2c6e49' }}>
+          <div className="text-center py-20">
+            <div className="text-3xl mb-3">😴</div>
+            <div className="font-display font-bold mb-1" style={{ color: '#f0f2f7' }}>No hotels found</div>
+            <div className="text-xs mb-5" style={{ color: '#8a93a8' }}>Try a different mile or clear filters</div>
+            <button onClick={() => router.push('/')}
+              className="px-5 py-2.5 rounded-lg text-sm font-bold font-display"
+              style={{ background: '#f5a623', color: '#0d0f14' }}>
               New Search
             </button>
           </div>
         ) : (
           <>
-            <p className="text-sm text-gray-500 mb-3">{filtered.length} hotel{filtered.length !== 1 ? 's' : ''} near mile {mile}</p>
+            <p className="text-xs mb-3" style={{ color: '#8a93a8' }}>
+              {filtered.length} hotel{filtered.length !== 1 ? 's' : ''} near mile {mile}
+            </p>
             <div className="space-y-3">
               {filtered.map(hotel => {
-                const badge = BADGE_STYLES[hotel.availability_badge] || BADGE_STYLES.available
-                const exit = (hotel as any).exits
+                const badge = BADGE[hotel.availability_badge] || BADGE.available
+                const exit = hotel.exits
                 const distance = exit ? Math.abs(exit.mile_marker - mile).toFixed(1) : null
                 return (
                   <div key={hotel.id}
                     onClick={() => router.push(`/hotel/${hotel.id}`)}
-                    className="bg-white rounded-2xl shadow-sm overflow-hidden cursor-pointer active:scale-98 transition-transform">
+                    style={{
+                      background: '#14171f',
+                      border: hotel.featured ? '1px solid rgba(245,166,35,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                    }}
+                    className="rounded-xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform">
+
                     {hotel.featured && (
-                      <div className="px-4 py-1.5 text-xs font-bold" style={{ background: '#f5c842', color: '#1a1a1a', fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }}>
-                        ⭐ FEATURED
+                      <div className="px-3.5 py-1.5 text-[10px] font-bold font-display uppercase tracking-[0.15em]"
+                           style={{ background: 'rgba(245,166,35,0.12)', color: '#f5a623' }}>
+                        ★ Featured
                       </div>
                     )}
+
                     {hotel.photo_url && (
-                      <img src={hotel.photo_url} alt={hotel.name} className="w-full h-32 object-cover"/>
+                      <img src={hotel.photo_url} alt={hotel.name} className="w-full h-28 object-cover"/>
                     )}
+
                     <div className="p-4">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <div>
-                          <h3 className="font-bold text-gray-900 text-base leading-tight">{hotel.name}</h3>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-display font-bold text-base leading-tight" style={{ color: '#f0f2f7' }}>
+                            {hotel.name}
+                          </h3>
                           {exit && (
-                            <p className="text-xs text-gray-400 mt-0.5">
+                            <p className="text-[11px] mt-0.5" style={{ color: '#8a93a8' }}>
                               {exit.exit_label} · {exit.city}, {exit.state}
                               {distance && ` · ${distance} mi away`}
                             </p>
                           )}
                         </div>
-                        <span className="text-xs font-semibold px-2 py-1 rounded-full shrink-0" style={{ background: badge.bg, color: badge.color }}>
-                          {badge.label}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: badge.dot }}/>
+                          <span className="text-[10px] font-medium" style={{ color: badge.color }}>
+                            {badge.label}
+                          </span>
+                        </div>
                       </div>
 
                       {(hotel.price_min || hotel.price_max) && (
-                        <p className="text-lg font-black text-gray-900 mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                          ${hotel.price_min}–${hotel.price_max}<span className="text-xs font-normal text-gray-400">/night</span>
-                        </p>
+                        <div className="mb-2">
+                          <span className="font-display font-bold text-lg" style={{ color: '#f5a623' }}>
+                            ${hotel.price_min}–${hotel.price_max}
+                          </span>
+                          <span className="text-xs ml-1" style={{ color: '#8a93a8' }}>/ night</span>
+                        </div>
                       )}
 
                       {hotel.amenities?.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {hotel.amenities.map(a => (
-                            <span key={a} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                        <div className="flex flex-wrap gap-1 mb-3">
+                          {hotel.amenities.map((a: string) => (
+                            <span key={a} className="text-[10px] px-2 py-0.5 rounded-full"
+                                  style={{ background: '#1c2030', color: '#b8c0cc' }}>
                               {AMENITY_ICONS[a]} {AMENITY_LABELS[a] || a}
                             </span>
                           ))}
@@ -191,9 +214,9 @@ function SearchResults() {
                       {hotel.phone && (
                         <a href={`tel:${hotel.phone}`}
                           onClick={e => e.stopPropagation()}
-                          className="flex items-center justify-center w-full py-3 rounded-xl text-white font-black text-lg transition-all active:scale-95"
-                          style={{ background: '#2c6e49', fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }}>
-                          📞 CALL HOTEL
+                          className="flex items-center justify-center w-full py-3 rounded-lg font-display font-bold text-sm transition-all active:scale-95"
+                          style={{ background: '#f5a623', color: '#0d0f14', letterSpacing: '0.02em' }}>
+                          📞 Call {hotel.phone}
                         </a>
                       )}
                     </div>
@@ -204,7 +227,6 @@ function SearchResults() {
           </>
         )}
       </main>
-      <div className="road-stripe" />
     </div>
   )
 }
