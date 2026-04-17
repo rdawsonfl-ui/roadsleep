@@ -39,6 +39,15 @@ export default function HotelPage() {
   const exit = (hotel as any).exits
   const interstate = exit?.interstates
 
+  const trackCall = () => {
+    // Fire-and-forget call log insert (don't block the tel: link)
+    supabase.from('call_logs').insert({
+      hotel_id: hotel.id,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
+      referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 200) : null,
+    }).then(() => {})
+  }
+
   return (
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '24px 20px 48px' }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
@@ -112,7 +121,7 @@ export default function HotelPage() {
 
             {hotel.phone && (
               <>
-                <a href={`tel:${hotel.phone}`} className="btn-amber" style={{
+                <a href={`tel:${hotel.phone}`} onClick={trackCall} className="btn-amber" style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   width: '100%', padding: '16px', fontSize: '18px', letterSpacing: '1px',
                   textDecoration: 'none', marginBottom: '10px',

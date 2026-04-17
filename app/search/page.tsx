@@ -100,6 +100,14 @@ function SearchResults() {
   }, [interstateId, direction, distance, userLat, userLng])
 
   const filtered = hotels.filter(h => activeFilters.length === 0 || activeFilters.every(f => h.amenities?.includes(f)))
+
+  const trackCall = (hotelId: string) => {
+    supabase.from('call_logs').insert({
+      hotel_id: hotelId,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
+      referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 200) : null,
+    }).then(() => {})
+  }
   const toggle = (f: string) => setActiveFilters(p => p.includes(f) ? p.filter(x => x !== f) : [...p, f])
 
   return (
@@ -242,7 +250,7 @@ function SearchResults() {
 
                       {hotel.phone && (
                         <a href={`tel:${hotel.phone}`}
-                          onClick={e => e.stopPropagation()}
+                          onClick={(e) => { e.stopPropagation(); trackCall(hotel.id) }}
                           className="btn-amber"
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center',

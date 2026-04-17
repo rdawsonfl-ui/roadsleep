@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase, type Hotel, type Interstate } from '@/lib/supabase'
+import AdminGate from './AdminGate'
 
 type Tab = 'hotels' | 'interstates'
 
@@ -18,7 +19,7 @@ const emptyHotel = {
   photo_url: '', exit_id: ''
 }
 
-export default function AdminPage() {
+function AdminPageContent() {
   const [tab, setTab] = useState<Tab>('hotels')
   const [hotels, setHotels] = useState<any[]>([])
   const [interstates, setInterstates] = useState<Interstate[]>([])
@@ -433,6 +434,10 @@ export default function AdminPage() {
       </div>
     </main>
   )
+}
+
+export default function AdminPage() {
+  return <AdminGate><AdminPageContent /></AdminGate>
 }
 
 export const dynamic = 'force-dynamic'
