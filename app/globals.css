@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
 
 :root {
   --night: #0d0f14;
@@ -19,30 +19,68 @@
   --border2: rgba(255,255,255,0.13);
 }
 
-html, body {
+body {
   background: var(--night);
   color: var(--white);
   font-family: 'DM Sans', sans-serif;
-  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
 }
 
-.font-display { font-family: 'Syne', sans-serif; letter-spacing: -0.5px; }
+h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
+.font-display { font-family: 'Syne', sans-serif; }
 
-.glow-amber {
-  box-shadow: 0 0 24px rgba(245,166,35,0.25);
-}
-
-input, select, textarea {
+/* Dark form inputs */
+.dark-input {
+  width: 100%;
   background: var(--night3);
-  color: var(--white);
   border: 1px solid var(--border);
-}
-input:focus, select:focus, textarea:focus {
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--white);
+  font-size: 14px;
+  font-family: 'DM Sans', sans-serif;
   outline: none;
-  border-color: var(--amber);
+  transition: border-color 0.15s;
 }
-select option { background: var(--night2); color: var(--white); }
+.dark-input:focus { border-color: var(--amber); }
+.dark-input::placeholder { color: var(--steel); }
 
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.dark-label {
+  display: block;
+  font-size: 11px;
+  color: var(--fog);
+  font-weight: 500;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+/* Amber button */
+.btn-amber {
+  background: var(--amber);
+  color: var(--night);
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: 8px;
+  padding: 12px 20px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-amber:hover { background: var(--amber2); }
+.btn-amber:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.hero-tag {
+  display: inline-block;
+  background: rgba(245, 166, 35, 0.15);
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(245, 166, 35, 0.25);
+}

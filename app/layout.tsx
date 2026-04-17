@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Nav from "./Nav";
 
 export const metadata: Metadata = {
-  title: "RoadSleep — Find Hotels on the Road",
-  description: "Mom-and-pop highway hotels by mile marker. No bookings, just call.",
+  title: "RoadSleep – Find Hotels by Mile Marker",
+  description: "Find affordable, realistic places to sleep by mile marker — fast.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }

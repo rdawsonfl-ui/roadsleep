@@ -2,9 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, type Interstate } from '@/lib/supabase'
-import Nav from '@/components/Nav'
 
-const DIRS = ['N','S','E','W']
+const DIRECTIONS = ['N', 'S', 'E', 'W']
 
 export default function Home() {
   const router = useRouter()
@@ -25,119 +24,127 @@ export default function Home() {
   }
 
   return (
-    <div style={{ background: '#0d0f14', minHeight: '100vh' }}>
-      <Nav />
-
+    <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)' }}>
       {/* Hero */}
-      <div style={{ background: 'linear-gradient(180deg, rgba(245,166,35,0.04) 0%, transparent 100%)' }}
-           className="px-5 pt-10 pb-8 text-center">
-        <div className="inline-block text-[10px] font-medium uppercase tracking-[0.15em] px-3 py-1 rounded-full mb-4"
-             style={{ background: 'rgba(245,166,35,0.12)', color: '#f5a623', border: '1px solid rgba(245,166,35,0.25)' }}>
-          Find Hotels by Mile Marker
-        </div>
-        <h1 className="font-display font-extrabold leading-[1.05] mb-2" style={{ fontSize: '38px', letterSpacing: '-1px', color: '#f0f2f7' }}>
-          Sleep anywhere<br/>on the highway.
+      <section style={{
+        padding: '56px 20px 40px',
+        textAlign: 'center',
+        background: 'linear-gradient(180deg, rgba(245,166,35,0.05) 0%, transparent 100%)',
+      }}>
+        <span className="hero-tag">FIND HOTELS BY MILE MARKER</span>
+        <h1 style={{
+          fontSize: '42px',
+          fontWeight: 800,
+          lineHeight: 1.1,
+          letterSpacing: '-1.5px',
+          marginTop: '20px',
+          marginBottom: '14px',
+          color: 'var(--white)',
+        }}>
+          Sleep <span style={{ color: 'var(--amber)' }}>easy</span><br/>on the road.
         </h1>
-        <p className="text-sm" style={{ color: '#8a93a8' }}>
-          Mom-and-pop motels, mile-marker search, tap to call.
+        <p style={{ color: 'var(--fog)', fontSize: '15px', maxWidth: '360px', margin: '0 auto', lineHeight: 1.5 }}>
+          Affordable, independent hotels — by interstate and mile marker. No booking fees. Just call.
         </p>
-      </div>
+      </section>
 
-      {/* Search card */}
-      <div className="px-5 pb-10 max-w-md mx-auto">
-        <form onSubmit={handleSearch}
-              style={{ background: '#14171f', border: '1px solid rgba(255,255,255,0.07)' }}
-              className="rounded-2xl overflow-hidden">
-          <div className="p-5 space-y-4">
-            <div>
-              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] mb-1.5" style={{ color: '#8a93a8' }}>
-                Interstate
-              </label>
+      {/* Search Card */}
+      <section style={{ padding: '0 20px 48px' }}>
+        <div style={{
+          maxWidth: '440px',
+          margin: '0 auto',
+          background: 'var(--night2)',
+          border: '1px solid var(--border)',
+          borderRadius: '16px',
+          padding: '24px',
+        }}>
+          <form onSubmit={handleSearch}>
+            <div style={{ marginBottom: '16px' }}>
+              <label className="dark-label">Interstate</label>
               <select
+                className="dark-input"
                 value={form.interstate}
                 onChange={e => setForm(f => ({ ...f, interstate: e.target.value }))}
-                className="w-full rounded-lg px-3.5 py-3 text-sm"
-                style={{ background: '#1c2030', color: '#f0f2f7', border: '1px solid rgba(255,255,255,0.07)' }}
                 required
               >
-                <option value="">Select interstate…</option>
+                <option value="">Select interstate...</option>
                 {interstates.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
               </select>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] mb-1.5" style={{ color: '#8a93a8' }}>
-                Direction
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {DIRS.map(d => {
+            <div style={{ marginBottom: '16px' }}>
+              <label className="dark-label">Direction</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                {DIRECTIONS.map(d => {
                   const active = form.direction === d
                   return (
-                    <button key={d} type="button"
+                    <button
+                      key={d}
+                      type="button"
                       onClick={() => setForm(f => ({ ...f, direction: d }))}
-                      className="py-3 rounded-lg text-sm font-bold font-display transition-all"
                       style={{
-                        background: active ? '#f5a623' : '#1c2030',
-                        color: active ? '#0d0f14' : '#8a93a8',
-                        border: `1px solid ${active ? '#f5a623' : 'rgba(255,255,255,0.07)'}`,
-                      }}>
-                      {d}
-                    </button>
+                        padding: '12px 0',
+                        borderRadius: '8px',
+                        border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
+                        background: active ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
+                        color: active ? 'var(--amber)' : 'var(--mist)',
+                        fontWeight: 600,
+                        fontFamily: 'Syne, sans-serif',
+                        fontSize: '15px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >{d}</button>
                   )
                 })}
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-medium uppercase tracking-[0.12em] mb-1.5" style={{ color: '#8a93a8' }}>
-                Mile Marker
-              </label>
+            <div style={{ marginBottom: '20px' }}>
+              <label className="dark-label">Mile Marker</label>
               <input
-                type="number" placeholder="e.g. 142"
+                type="number"
+                placeholder="e.g. 142"
                 value={form.mile_marker}
                 onChange={e => setForm(f => ({ ...f, mile_marker: e.target.value }))}
-                className="w-full rounded-lg px-3.5 py-3 text-sm"
-                style={{ background: '#1c2030', color: '#f0f2f7', border: '1px solid rgba(255,255,255,0.07)' }}
-                min="0" required
+                className="dark-input"
+                min="0"
+                required
               />
-              <p className="text-[11px] mt-1.5" style={{ color: '#8a93a8' }}>Shows hotels within 10 miles</p>
+              <p style={{ fontSize: '11px', color: 'var(--steel)', marginTop: '6px' }}>
+                Shows hotels within 10 miles of your marker
+              </p>
             </div>
-          </div>
 
-          <button type="submit" disabled={loading}
-            className="w-full py-4 font-display font-bold text-base tracking-wide transition-all disabled:opacity-60"
-            style={{ background: '#f5a623', color: '#0d0f14', letterSpacing: '0.02em' }}>
-            {loading ? 'Searching…' : 'Find Hotels →'}
-          </button>
-        </form>
+            <button type="submit" disabled={loading} className="btn-amber" style={{ width: '100%', padding: '14px', fontSize: '15px', letterSpacing: '1px' }}>
+              {loading ? 'SEARCHING...' : 'FIND HOTELS →'}
+            </button>
+          </form>
+        </div>
+      </section>
 
-        {/* Feature pills */}
-        <div className="grid grid-cols-3 gap-2 mt-5">
+      {/* Features */}
+      <section style={{ padding: '0 20px 48px', maxWidth: '440px', margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
           {[
-            { icon: '🛻', label: 'Truck parking' },
-            { icon: '🐾', label: 'Pet friendly' },
-            { icon: '🌙', label: '24hr check-in' },
-          ].map(f => (
-            <div key={f.label}
-                 style={{ background: '#14171f', border: '1px solid rgba(255,255,255,0.07)' }}
-                 className="rounded-xl p-3 text-center">
-              <div className="text-lg mb-1">{f.icon}</div>
-              <div className="text-[11px]" style={{ color: '#8a93a8' }}>{f.label}</div>
+            ['🚛', 'Truck Parking'],
+            ['🐾', 'Pet Friendly'],
+            ['🌙', '24hr Check-in'],
+          ].map(([icon, label]) => (
+            <div key={label} style={{
+              background: 'var(--night2)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '14px 10px',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: '20px', marginBottom: '4px' }}>{icon}</div>
+              <div style={{ fontSize: '11px', color: 'var(--mist)', fontWeight: 500 }}>{label}</div>
             </div>
           ))}
         </div>
-
-        {/* Tagline */}
-        <div className="mt-8 text-center">
-          <div className="text-[11px] uppercase tracking-[0.15em] mb-2" style={{ color: '#8a93a8' }}>
-            Built for the road
-          </div>
-          <div className="text-sm leading-relaxed" style={{ color: '#b8c0cc' }}>
-            No commissions. No booking apps. Just phone numbers from the highway straight to the motel.
-          </div>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   )
 }
 
