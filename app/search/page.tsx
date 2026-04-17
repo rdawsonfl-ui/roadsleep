@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase, type Interstate } from '@/lib/supabase'
+import HighwayView from './HighwayView'
 
 const AMENITY_ICONS: Record<string, string> = {
   truck_parking: '🚛', pets: '🐾', '24hr_checkin': '🌙', wifi: '📶', pool: '🏊',
@@ -161,6 +162,12 @@ function SearchResults() {
           </div>
         ) : (
           <>
+            <HighwayView
+              hotels={filtered.map(h => ({ id: h.id, name: h.name, distance: h._distance, featured: h.featured, availability: h.availability_badge }))}
+              maxDistance={distance}
+              direction={direction}
+              onPinClick={(id) => router.push(`/hotel/${id}`)}
+            />
             <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
               {filtered.length} hotel{filtered.length !== 1 ? 's' : ''} ahead · sorted by distance
             </p>
