@@ -12,46 +12,67 @@ const DISTANCES = [
   { value: 9999, label: 'No limit' },
 ]
 
+// Popular starting points for manual selection (covers most US highway corridors)
+const CITY_PRESETS: { label: string; lat: number; lng: number }[] = [
+  { label: 'Cape Coral, FL', lat: 26.5629, lng: -81.9495 },
+  { label: 'Fort Myers, FL', lat: 26.6406, lng: -81.8723 },
+  { label: 'Tampa, FL', lat: 27.9506, lng: -82.4572 },
+  { label: 'Ocala, FL', lat: 29.1872, lng: -82.1401 },
+  { label: 'Jacksonville, FL', lat: 30.3322, lng: -81.6557 },
+  { label: 'Orlando, FL', lat: 28.5383, lng: -81.3792 },
+  { label: 'Atlanta, GA', lat: 33.7490, lng: -84.3880 },
+  { label: 'Nashville, TN', lat: 36.1627, lng: -86.7816 },
+]
+
 export default function Home() {
   const router = useRouter()
   const [interstates, setInterstates] = useState<Interstate[]>([])
   const [form, setForm] = useState({ interstate: '', direction: '', distance: 30 })
   const [loading, setLoading] = useState(false)
   const [locStatus, setLocStatus] = useState<'idle' | 'getting' | 'got' | 'error'>('idle')
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [coords, setCoords] = useState<{ lat: number; lng: number; source: 'gps' | 'manual' } | null>(null)
   const [locError, setLocError] = useState('')
+  const [showManual, setShowManual] = useState(false)
+  const [manualCity, setManualCity] = useState('')
 
   useEffect(() => {
     supabase.from('interstates').select('*').eq('is_active', true).order('name')
       .then(({ data }) => { if (data) setInterstates(data) })
   }, [])
 
-  // Try to grab location automatically on mount
   useEffect(() => { requestLocation() }, [])
 
   function requestLocation() {
     if (!navigator.geolocation) {
-      setLocStatus('error'); setLocError('Geolocation not supported')
+      setLocStatus('error'); setLocError('Geolocation not supported on this device')
+      setShowManual(true)
       return
     }
     setLocStatus('getting')
     navigator.geolocation.getCurrentPosition(
       pos => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'gps' })
         setLocStatus('got')
       },
       err => {
         setLocStatus('error')
-        setLocError(err.code === 1 ? 'Location blocked — allow location to use this feature' : 'Couldn\'t get location')
+        setLocError(err.code === 1 ? 'Location blocked' : 'Couldn\'t get location')
+        setShowManual(true)
       },
       { enableHighAccuracy: true, timeout: 10000 }
     )
   }
 
+  function pickCity(c: { label: string; lat: number; lng: number }) {
+    setCoords({ lat: c.lat, lng: c.lng, source: 'manual' })
+    setLocStatus('got')
+    setManualCity(c.label)
+  }
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.interstate || !form.direction) return
-    if (!coords) { setLocError('Need your location to find hotels ahead'); return }
+    if (!coords) { setLocError('Pick a starting location first'); return }
     setLoading(true)
     router.push(`/search?interstate=${form.interstate}&direction=${form.direction}&distance=${form.distance}&lat=${coords.lat}&lng=${coords.lng}`)
   }
@@ -60,8 +81,7 @@ export default function Home() {
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)' }}>
       {/* Hero */}
       <section style={{
-        padding: '48px 20px 32px',
-        textAlign: 'center',
+        padding: '48px 20px 32px', textAlign: 'center',
         background: 'linear-gradient(180deg, rgba(245,166,35,0.05) 0%, transparent 100%)',
       }}>
         <span className="hero-tag">HOTELS AHEAD OF YOU</span>
@@ -76,8 +96,8 @@ export default function Home() {
         </p>
       </section>
 
-      {/* Location status */}
-      <section style={{ padding: '0 20px 16px' }}>
+      {/* Location banner */}
+      <section style={{ padding: '0 20px 12px' }}>
         <div style={{ maxWidth: '440px', margin: '0 auto' }}>
           {locStatus === 'getting' && (
             <div style={{
@@ -93,27 +113,57 @@ export default function Home() {
             <div style={{
               background: 'rgba(62,207,142,0.08)', border: '1px solid rgba(62,207,142,0.25)',
               borderRadius: '10px', padding: '10px 14px', display: 'flex', alignItems: 'center',
-              gap: '10px', fontSize: '12px', color: 'var(--green)',
+              justifyContent: 'space-between', gap: '10px', fontSize: '12px', color: 'var(--green)',
             }}>
-              <span style={{ fontSize: '14px' }}>✓</span>
-              Location locked — {coords.lat.toFixed(2)}°, {coords.lng.toFixed(2)}°
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>✓</span>
+                {coords.source === 'gps' 
+                  ? <>GPS locked · {coords.lat.toFixed(2)}°, {coords.lng.toFixed(2)}°</>
+                  : <>Using: {manualCity || 'custom location'}</>
+                }
+              </span>
+              <button type="button" onClick={() => { setShowManual(true); setCoords(null); setLocStatus('idle') }}
+                style={{ background: 'none', border: 'none', color: 'var(--fog)', fontSize: '11px', cursor: 'pointer', textDecoration: 'underline' }}>
+                change
+              </button>
             </div>
           )}
-          {locStatus === 'error' && (
+          {locStatus === 'error' && !coords && (
             <div style={{
-              background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.25)',
-              borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: 'var(--red)',
+              background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.25)',
+              borderRadius: '10px', padding: '10px 14px', fontSize: '12px', color: 'var(--amber)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px',
             }}>
-              <span>⚠ {locError}</span>
-              <button onClick={requestLocation} style={{
-                background: 'var(--red)', color: 'var(--night)', border: 'none',
+              <span>📍 {locError} — pick a starting city below</span>
+              <button type="button" onClick={requestLocation} style={{
+                background: 'var(--amber)', color: 'var(--night)', border: 'none',
                 padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-              }}>Retry</button>
+              }}>Retry GPS</button>
             </div>
           )}
         </div>
       </section>
+
+      {/* Manual city picker (shown when GPS fails OR user clicks "change") */}
+      {(showManual && !coords) && (
+        <section style={{ padding: '0 20px 16px' }}>
+          <div style={{ maxWidth: '440px', margin: '0 auto', background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px 16px' }}>
+            <label className="dark-label" style={{ marginBottom: '8px' }}>Or pick a starting city</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {CITY_PRESETS.map(c => (
+                <button key={c.label} type="button" onClick={() => pickCity(c)}
+                  style={{
+                    background: 'var(--night3)', color: 'var(--mist)', border: '1px solid var(--border)',
+                    padding: '6px 12px', borderRadius: '16px', fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+                    transition: 'all 0.15s',
+                  }}>
+                  📍 {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Search Card */}
       <section style={{ padding: '0 20px 40px' }}>
@@ -142,20 +192,15 @@ export default function Home() {
                   const active = form.direction === d
                   return (
                     <button
-                      key={d}
-                      type="button"
+                      key={d} type="button"
                       onClick={() => setForm(f => ({ ...f, direction: d }))}
                       style={{
-                        padding: '12px 0',
-                        borderRadius: '8px',
+                        padding: '12px 0', borderRadius: '8px',
                         border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
                         background: active ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
                         color: active ? 'var(--amber)' : 'var(--mist)',
-                        fontWeight: 600,
-                        fontFamily: 'Syne, sans-serif',
-                        fontSize: '15px',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
+                        fontWeight: 600, fontFamily: 'Syne, sans-serif',
+                        fontSize: '15px', cursor: 'pointer', transition: 'all 0.15s',
                       }}
                     >{d}</button>
                   )
@@ -170,21 +215,15 @@ export default function Home() {
                   const active = form.distance === d.value
                   return (
                     <button
-                      key={d.value}
-                      type="button"
+                      key={d.value} type="button"
                       onClick={() => setForm(f => ({ ...f, distance: d.value }))}
                       style={{
-                        padding: '10px 0',
-                        borderRadius: '8px',
+                        padding: '10px 0', borderRadius: '8px',
                         border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
                         background: active ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
                         color: active ? 'var(--amber)' : 'var(--mist)',
-                        fontWeight: 600,
-                        fontFamily: 'DM Sans, sans-serif',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                        whiteSpace: 'nowrap',
+                        fontWeight: 600, fontFamily: 'DM Sans, sans-serif',
+                        fontSize: '12px', cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
                       }}
                     >{d.label}</button>
                   )
@@ -193,7 +232,7 @@ export default function Home() {
             </div>
 
             <button type="submit" disabled={loading || !coords} className="btn-amber" style={{ width: '100%', padding: '14px', fontSize: '15px', letterSpacing: '1px' }}>
-              {loading ? 'SEARCHING...' : !coords ? 'WAITING FOR LOCATION...' : 'FIND HOTELS →'}
+              {loading ? 'SEARCHING...' : !coords ? 'PICK A STARTING CITY ↑' : 'FIND HOTELS →'}
             </button>
           </form>
         </div>
