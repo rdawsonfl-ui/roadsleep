@@ -191,7 +191,7 @@ export default function Home() {
             </div>
 
             <button type="submit" disabled={loading || !coords} className="btn-amber" style={{ width: '100%', padding: '14px', fontSize: '15px', letterSpacing: '1px' }}>
-              {loading ? 'SEARCHING...' : !coords ? 'PICK A STARTING CITY ↑' : 'FIND HOTELS →'}
+              {loading ? 'SEARCHING...' : 'FIND HOTELS →'}
             </button>
           </form>
         </div>
