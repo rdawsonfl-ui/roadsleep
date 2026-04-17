@@ -58,25 +58,31 @@ function SearchResults() {
       const { data: iData } = await supabase.from('interstates').select('*').eq('id', interstateId).single()
       if (iData) setInterstate(iData)
 
-      // Get ALL exits on this interstate in the chosen direction (with coords)
+      // Get ALL exits on this interstate in the chosen direction
       const { data: exits } = await supabase
         .from('exits')
         .select('id, mile_marker, exit_label, city, state, lat, lng')
         .eq('interstate_id', interstateId)
         .eq('direction', direction)
-        .not('lat', 'is', null)
 
       if (!exits || exits.length === 0) { setHotels([]); setLoading(false); return }
 
-      // Filter to exits that are AHEAD of the user within chosen distance
-      const aheadExits = exits
-        .map(e => ({
-          ...e,
-          _distance: milesBetween(userLat, userLng, Number(e.lat), Number(e.lng)),
-          _ahead: isAhead(userLat, userLng, Number(e.lat), Number(e.lng), direction),
-        }))
-        .filter(e => e._ahead && e._distance <= distance)
-        .sort((a, b) => a._distance - b._distance)
+      const hasGPS = userLat !== 0 && userLng !== 0
+
+      // GPS available: filter ahead within distance. No GPS: show all sorted by mile marker
+      const aheadExits = hasGPS
+        ? exits
+            .filter(e => e.lat && e.lng)
+            .map(e => ({
+              ...e,
+              _distance: milesBetween(userLat, userLng, Number(e.lat), Number(e.lng)),
+              _ahead: isAhead(userLat, userLng, Number(e.lat), Number(e.lng), direction),
+            }))
+            .filter(e => e._ahead && e._distance <= distance)
+            .sort((a, b) => a._distance - b._distance)
+        : exits
+            .map(e => ({ ...e, _distance: Number(e.mile_marker) }))
+            .sort((a, b) => direction === 'S' ? b._distance - a._distance : a._distance - b._distance)
 
       if (aheadExits.length === 0) { setHotels([]); setLoading(false); return }
 

@@ -51,9 +51,9 @@ export default function Home() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.interstate || !form.direction) return
-    if (!coords) { setLocError('Pick a starting location first'); return }
+    // Allow search without GPS - will show all hotels on interstate
     setLoading(true)
-    router.push(`/search?interstate=${form.interstate}&direction=${form.direction}&distance=${form.distance}&lat=${coords.lat}&lng=${coords.lng}`)
+    router.push(`/search?interstate=${form.interstate}&direction=${form.direction}&distance=${form.distance}&lat=${coords?.lat ?? 0}&lng=${coords?.lng ?? 0}`)
   }
 
   return (
@@ -190,7 +190,7 @@ export default function Home() {
               </div>
             </div>
 
-            <button type="submit" disabled={loading || !coords} className="btn-amber" style={{ width: '100%', padding: '14px', fontSize: '15px', letterSpacing: '1px' }}>
+            <button type="submit" disabled={loading} className="btn-amber" style={{ width: '100%', padding: '14px', fontSize: '15px', letterSpacing: '1px' }}>
               {loading ? 'SEARCHING...' : 'FIND HOTELS →'}
             </button>
           </form>
