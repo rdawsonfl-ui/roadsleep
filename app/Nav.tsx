@@ -6,6 +6,7 @@ export default function Nav() {
   const path = usePathname()
   const tabs = [
     { href: '/', label: 'Find Hotels' },
+    { href: '/hotelier', label: 'Hoteliers' },
     { href: '/dashboard', label: 'Dashboard' },
     { href: '/admin', label: 'Admin' },
   ]
