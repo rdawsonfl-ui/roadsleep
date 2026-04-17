@@ -29,7 +29,7 @@ export default function AdminPage() {
   const [msg, setMsg] = useState('')
   const [csvText, setCsvText] = useState('')
   const [newInterstate, setNewInterstate] = useState('')
-  const [exitForm, setExitForm] = useState({ interstate_id: '', direction: 'N', exit_label: '', mile_marker: '', city: '', state: '' })
+  const [exitForm, setExitForm] = useState({ interstate_id: '', direction: 'N', exit_label: '', mile_marker: '', city: '', state: '', lat: '', lng: '' })
 
   useEffect(() => { loadAll() }, [])
 
@@ -113,8 +113,10 @@ export default function AdminPage() {
       interstate_id: exitForm.interstate_id, direction: exitForm.direction,
       exit_label: exitForm.exit_label, mile_marker: parseFloat(exitForm.mile_marker),
       city: exitForm.city, state: exitForm.state,
+      lat: exitForm.lat ? parseFloat(exitForm.lat) : null,
+      lng: exitForm.lng ? parseFloat(exitForm.lng) : null,
     })
-    setExitForm({ interstate_id: '', direction: 'N', exit_label: '', mile_marker: '', city: '', state: '' })
+    setExitForm({ interstate_id: '', direction: 'N', exit_label: '', mile_marker: '', city: '', state: '', lat: '', lng: '' })
     flash('Exit added ✓'); loadAll()
   }
 
@@ -385,7 +387,18 @@ export default function AdminPage() {
                   <label className="dark-label">State</label>
                   <input className="dark-input" value={exitForm.state} onChange={e => setExitForm(f => ({ ...f, state: e.target.value }))} placeholder="FL"/>
                 </div>
+                <div>
+                  <label className="dark-label">Latitude</label>
+                  <input className="dark-input" type="number" step="0.000001" value={exitForm.lat} onChange={e => setExitForm(f => ({ ...f, lat: e.target.value }))} placeholder="29.2108"/>
+                </div>
+                <div>
+                  <label className="dark-label">Longitude</label>
+                  <input className="dark-input" type="number" step="0.000001" value={exitForm.lng} onChange={e => setExitForm(f => ({ ...f, lng: e.target.value }))} placeholder="-81.0228"/>
+                </div>
               </div>
+              <p style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '8px' }}>
+                💡 Get lat/lng from Google Maps — right-click any spot → copy coordinates
+              </p>
               <button onClick={addExit} className="btn-amber" style={{ marginTop: '14px', padding: '10px 18px', fontSize: '13px' }}>Add Exit</button>
             </div>
 
