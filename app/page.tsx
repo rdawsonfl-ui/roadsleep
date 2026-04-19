@@ -1,7 +1,4 @@
 
-cat /home/claude/roadsleep/app/page.tsx
-Output
-
 'use client';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
