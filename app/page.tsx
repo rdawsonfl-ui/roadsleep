@@ -16,7 +16,7 @@ type Hotel = {
   featured: boolean | null
   exit_id: string | null
   exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; interstates?: { name: string | null } | null } | null
-  distance?: number | null
+  distance: number | null
 }
 
 function directionsUrl(h: Hotel): string {
@@ -31,15 +31,12 @@ function directionsUrl(h: Hotel): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name)}`
 }
 
-// Haversine distance in miles
 function milesBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8
   const toRad = (d: number) => (d * Math.PI) / 180
   const dLat = toRad(lat2 - lat1)
   const dLng = toRad(lng2 - lng1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
@@ -62,7 +59,6 @@ export default function HomePage() {
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
 
-  // Ask for GPS on mount
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
       setLocStatus('denied')
@@ -79,22 +75,21 @@ export default function HomePage() {
     )
   }, [])
 
-  // Load hotels
   useEffect(() => {
     ;(async () => {
       const { data } = await supabase
         .from('hotels')
-        .select(
-          'id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured,exit_id,exits(lat,lng,city,state,mile_marker,interstates(name))'
-        )
+        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured,exit_id,exits(lat,lng,city,state,mile_marker,interstates(name))')
         .neq('availability_badge', 'full')
         .limit(200)
-      if (data) setHotels(data as any)
+      if (data) {
+        const withNullDist: Hotel[] = (data as any[]).map((h) => ({ ...h, distance: null }))
+        setHotels(withNullDist)
+      }
       setLoading(false)
     })()
   }, [])
 
-  // Compute distance for each hotel, filter, and sort
   const hotelsWithDistance: Hotel[] = hotels.map((h) => {
     const hLat = h.latitude ?? h.exits?.lat
     const hLng = h.longitude ?? h.exits?.lng
@@ -107,26 +102,29 @@ export default function HomePage() {
 
   let filtered = hotelsWithDistance.filter((h) => !h.price_min || h.price_min <= maxPrice)
 
-  // Apply distance filter only if we have user location
   if (userLoc) {
-    if (distance === '10') filtered = filtered.filter((h) => h.distance !== null && h.distance <= 10)
-    else if (distance === '30') filtered = filtered.filter((h) => h.distance !== null && h.distance <= 30)
-    else if (distance === '60') filtered = filtered.filter((h) => h.distance !== null && h.distance <= 60)
-    // 'closest' = no filter, just sort
+    if (distance === '10') {
+      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= 10)
+    } else if (distance === '30') {
+      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= 30)
+    } else if (distance === '60') {
+      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= 60)
+    }
   }
 
-  // Sort
   if (userLoc && distance === 'closest') {
     filtered.sort((a, b) => {
       if (a.distance === null) return 1
       if (b.distance === null) return -1
-      return a.distance - b.distance
+      return (a.distance as number) - (b.distance as number)
     })
   } else {
     filtered.sort((a, b) => {
       if (a.featured && !b.featured) return -1
       if (!a.featured && b.featured) return 1
-      if (a.distance !== null && b.distance !== null) return a.distance - b.distance
+      if (a.distance !== null && b.distance !== null) {
+        return (a.distance as number) - (b.distance as number)
+      }
       return 0
     })
   }
@@ -172,7 +170,7 @@ export default function HomePage() {
 
         {filtered.map((h) => {
           const price = h.price_min ? `$${h.price_min}${h.price_max ? `-$${h.price_max}` : ''}` : 'Call'
-          const distLabel = h.distance !== null && h.distance !== undefined ? `${Math.round(h.distance)} mi away` : null
+          const distLabel = h.distance !== null ? `${Math.round(h.distance as number)} mi away` : null
           const exitLabel = h.exits ? `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}` : null
           return (
             <div key={h.id} style={{ background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
