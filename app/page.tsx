@@ -14,16 +14,33 @@ type Hotel = {
   amenities: string[] | null
   availability_badge: string | null
   featured: boolean | null
+  exit_id: string | null
+  exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; interstates?: { name: string | null } | null } | null
+  distance?: number | null
 }
 
 function directionsUrl(h: Hotel): string {
-  if (h.latitude && h.longitude) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${h.latitude},${h.longitude}`
+  const lat = h.latitude ?? h.exits?.lat
+  const lng = h.longitude ?? h.exits?.lng
+  if (lat && lng) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
   if (h.address) {
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(h.address)}`
   }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name)}`
+}
+
+// Haversine distance in miles
+function milesBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 async function logCall(hotelId: string) {
@@ -42,21 +59,77 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true)
   const [maxPrice, setMaxPrice] = useState(200)
   const [distance, setDistance] = useState<'10' | '30' | '60' | 'closest'>('30')
+  const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
+  const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
 
+  // Ask for GPS on mount
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setLocStatus('denied')
+      return
+    }
+    setLocStatus('asking')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocStatus('granted')
+      },
+      () => setLocStatus('denied'),
+      { timeout: 10000, maximumAge: 300000 }
+    )
+  }, [])
+
+  // Load hotels
   useEffect(() => {
     ;(async () => {
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured')
+        .select(
+          'id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured,exit_id,exits(lat,lng,city,state,mile_marker,interstates(name))'
+        )
         .neq('availability_badge', 'full')
-        .order('featured', { ascending: false })
-        .limit(50)
-      if (data) setHotels(data as Hotel[])
+        .limit(200)
+      if (data) setHotels(data as any)
       setLoading(false)
     })()
   }, [])
 
-  const filtered = hotels.filter((h) => !h.price_min || h.price_min <= maxPrice)
+  // Compute distance for each hotel, filter, and sort
+  const hotelsWithDistance: Hotel[] = hotels.map((h) => {
+    const hLat = h.latitude ?? h.exits?.lat
+    const hLng = h.longitude ?? h.exits?.lng
+    let dist: number | null = null
+    if (userLoc && hLat && hLng) {
+      dist = milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng))
+    }
+    return { ...h, distance: dist }
+  })
+
+  let filtered = hotelsWithDistance.filter((h) => !h.price_min || h.price_min <= maxPrice)
+
+  // Apply distance filter only if we have user location
+  if (userLoc) {
+    if (distance === '10') filtered = filtered.filter((h) => h.distance !== null && h.distance <= 10)
+    else if (distance === '30') filtered = filtered.filter((h) => h.distance !== null && h.distance <= 30)
+    else if (distance === '60') filtered = filtered.filter((h) => h.distance !== null && h.distance <= 60)
+    // 'closest' = no filter, just sort
+  }
+
+  // Sort
+  if (userLoc && distance === 'closest') {
+    filtered.sort((a, b) => {
+      if (a.distance === null) return 1
+      if (b.distance === null) return -1
+      return a.distance - b.distance
+    })
+  } else {
+    filtered.sort((a, b) => {
+      if (a.featured && !b.featured) return -1
+      if (!a.featured && b.featured) return 1
+      if (a.distance !== null && b.distance !== null) return a.distance - b.distance
+      return 0
+    })
+  }
 
   return (
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '20px 16px 48px' }}>
@@ -65,6 +138,12 @@ export default function HomePage() {
           Hotels at your <span style={{ color: 'var(--amber)' }}>next exit</span>
         </h1>
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '20px' }}>Hotels along major interstates</p>
+
+        {locStatus === 'denied' && (
+          <div style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: 'var(--mist)' }}>
+            📍 Location blocked. Distance filtering disabled. <button onClick={() => window.location.reload()} style={{ background: 'none', border: 'none', color: 'var(--amber)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>Enable GPS</button> to see nearest hotels.
+          </div>
+        )}
 
         <div style={{ marginBottom: '16px' }}>
           <label style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', display: 'block', marginBottom: '6px' }}>Distance</label>
@@ -88,19 +167,23 @@ export default function HomePage() {
         </div>
 
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '14px' }}>
-          {loading ? 'Loading...' : `${filtered.length} hotels found`}
+          {loading ? 'Loading...' : locStatus === 'asking' ? 'Getting your location...' : `${filtered.length} hotels found`}
         </p>
 
         {filtered.map((h) => {
           const price = h.price_min ? `$${h.price_min}${h.price_max ? `-$${h.price_max}` : ''}` : 'Call'
+          const distLabel = h.distance !== null && h.distance !== undefined ? `${Math.round(h.distance)} mi away` : null
+          const exitLabel = h.exits ? `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}` : null
           return (
             <div key={h.id} style={{ background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                 {h.featured && <span style={{ fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Featured</span>}
                 {h.availability_badge === 'available' && <span style={{ fontSize: '10px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Available</span>}
+                {distLabel && <span style={{ fontSize: '11px', color: 'var(--mist)', fontWeight: 600 }}>{distLabel}</span>}
                 <span style={{ marginLeft: 'auto', color: 'var(--amber)', fontWeight: 800, fontSize: '17px', fontStyle: 'italic' }}>{price}</span>
               </div>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white)', marginBottom: '4px' }}>{h.name}</h3>
+              {exitLabel && <p style={{ fontSize: '11px', color: 'var(--fog)', marginBottom: '4px' }}>{exitLabel}</p>}
               <p style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '10px' }}>{h.address || ''}</p>
               {h.amenities && h.amenities.length > 0 && (
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
