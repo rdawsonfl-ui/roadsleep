@@ -9,6 +9,13 @@ type Hotel = {
   check_in_time: string; check_out_time: string; website: string
   amenities: string[]; availability_badge: string; featured: boolean
   exit_id?: string
+  // Boost columns — match the DB schema added in the boost migration.
+  // featured doubles as "boost is on right now"; the rest add the time/price/limit logic.
+  boost_price?: number | null
+  boost_started_at?: string | null
+  boost_ends_at?: string | null
+  boost_duration_hr?: 1 | 2 | 3 | null
+  last_boost_date?: string | null
 }
 // Mirrors what the admin panel selects: each exit row carries the parent
 // interstate so we can render "I-75 N · MM 143 · Punta Gorda, FL" in one dropdown.
@@ -177,6 +184,98 @@ export default function HotelierPortal() {
   function toggleAmenity(key: string) {
     const cur = hotelForm.amenities || []
     setHotelForm(f => ({ ...f, amenities: cur.includes(key) ? cur.filter(a => a !== key) : [...cur, key] }))
+  }
+
+  // ─── BOOST ─────────────────────────────────────────────────────────────
+  // Local state controls the "which hotel is the user setting up boost for"
+  // panel — only one expanded at a time. The actual data lives in the hotels
+  // table (boost_price, boost_started_at, boost_ends_at, etc.).
+  const [boostingHotelId, setBoostingHotelId] = useState<string | null>(null)
+  const [boostPriceInput, setBoostPriceInput] = useState<string>('')
+  const [boostDuration, setBoostDuration] = useState<1 | 2 | 3>(1)
+  const [boostBusy, setBoostBusy] = useState(false)
+
+  // ET calendar date as YYYY-MM-DD — used for the "1x per day" rule.
+  function etDateString(d: Date = new Date()): string {
+    // Intl gives reliable ET conversion regardless of server/client TZ
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(d)
+    const y = parts.find(p => p.type === 'year')?.value
+    const m = parts.find(p => p.type === 'month')?.value
+    const day = parts.find(p => p.type === 'day')?.value
+    return `${y}-${m}-${day}`
+  }
+
+  function formatBoostCountdown(endsAt: string): string {
+    const ms = new Date(endsAt).getTime() - Date.now()
+    if (ms <= 0) return 'ending…'
+    const totalMin = Math.floor(ms / 60000)
+    const h = Math.floor(totalMin / 60)
+    const m = totalMin % 60
+    return h > 0 ? `${h}h ${m}m left` : `${m}m left`
+  }
+
+  function isBoostedNow(h: Hotel): boolean {
+    if (!h.featured) return false
+    if (!h.boost_ends_at) return false
+    return new Date(h.boost_ends_at).getTime() > Date.now()
+  }
+
+  function hasUsedBoostToday(h: Hotel): boolean {
+    if (!h.last_boost_date) return false
+    return h.last_boost_date === etDateString()
+  }
+
+  function openBoostPanel(h: Hotel) {
+    setBoostingHotelId(h.id)
+    setBoostPriceInput(h.boost_price ? String(h.boost_price) : '')
+    setBoostDuration(1)
+    setMsg(''); setErr('')
+  }
+
+  async function activateBoost(h: Hotel) {
+    if (!hotelier) return
+    const priceNum = parseInt(boostPriceInput, 10)
+    if (!priceNum || priceNum <= 0) { setErr('Enter a discount price first.'); return }
+    if (h.price_min && priceNum >= h.price_min) {
+      setErr(`Discount price ($${priceNum}) must be lower than your regular rate ($${h.price_min}).`); return
+    }
+    if (hasUsedBoostToday(h)) { setErr('You have already used today\'s boost on this hotel.'); return }
+
+    setBoostBusy(true); setErr('')
+    const now = new Date()
+    const endsAt = new Date(now.getTime() + boostDuration * 60 * 60 * 1000)
+    const { error } = await supabase.from('hotels').update({
+      featured: true,
+      boost_price: priceNum,
+      boost_started_at: now.toISOString(),
+      boost_ends_at: endsAt.toISOString(),
+      boost_duration_hr: boostDuration,
+      last_boost_date: etDateString(now),
+    }).eq('id', h.id)
+    setBoostBusy(false)
+    if (error) { setErr('Could not activate boost.'); return }
+    setMsg(`✓ Boost active for ${boostDuration} hour${boostDuration > 1 ? 's' : ''}!`)
+    setBoostingHotelId(null)
+    await loadAll(hotelier.id)
+  }
+
+  async function endBoost(h: Hotel) {
+    if (!hotelier) return
+    setBoostBusy(true); setErr('')
+    const { error } = await supabase.from('hotels').update({
+      featured: false,
+      boost_started_at: null,
+      boost_ends_at: null,
+      boost_duration_hr: null,
+      // Keep boost_price + last_boost_date — daily lockout still applies
+    }).eq('id', h.id)
+    setBoostBusy(false)
+    if (error) { setErr('Could not end boost.'); return }
+    setMsg('Boost ended.')
+    await loadAll(hotelier.id)
   }
 
   const totalCallsMonth = Object.values(stats).reduce((s, v) => s + v.calls_month, 0)
@@ -388,6 +487,138 @@ export default function HotelierPortal() {
                         {!st.isRev && <div style={{ fontSize:'10px', color:'var(--fog)' }}>calls</div>}
                       </div>
                     ))}
+                  </div>
+
+                  {/* ─── BOOST CONTROL ─────────────────────────────────────────
+                       Three states drive the UI:
+                         (a) currently boosted → show countdown + End Now button
+                         (b) used today's boost (window over) → locked till tomorrow
+                         (c) eligible → "Boost This Listing" button (opens setup panel)
+                       Boost requires a discount price entry; we disable submission
+                       if it's missing or not lower than the regular rate.            */}
+                  <div style={{ marginTop:'14px', borderTop:'1px solid var(--border)', paddingTop:'14px' }}>
+                    {isBoostedNow(h) ? (
+                      <div style={{
+                        background:'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
+                        color:'var(--night)', borderRadius:'10px', padding:'12px 14px',
+                        display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', flexWrap:'wrap',
+                      }}>
+                        <div>
+                          <div style={{ fontSize:'12px', fontWeight:700, fontFamily:'Syne, sans-serif', letterSpacing:'1px' }}>
+                            🔥 BOOST ACTIVE
+                          </div>
+                          <div style={{ fontSize:'11px', marginTop:'2px', fontWeight:600 }}>
+                            ${h.boost_price} discount · {h.boost_ends_at ? formatBoostCountdown(h.boost_ends_at) : ''}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => endBoost(h)}
+                          disabled={boostBusy}
+                          style={{
+                            background:'rgba(15,22,38,0.85)', color:'var(--white)',
+                            border:'none', padding:'8px 14px', borderRadius:'8px',
+                            fontSize:'12px', fontWeight:600, cursor:'pointer',
+                          }}
+                        >
+                          End Boost Now
+                        </button>
+                      </div>
+                    ) : hasUsedBoostToday(h) ? (
+                      <div style={{
+                        background:'var(--night3)', border:'1px solid var(--border)',
+                        borderRadius:'10px', padding:'10px 14px', textAlign:'center',
+                      }}>
+                        <div style={{ fontSize:'12px', color:'var(--mist)', fontWeight:600 }}>
+                          ⏸ Today's boost used — available again tomorrow
+                        </div>
+                      </div>
+                    ) : boostingHotelId === h.id ? (
+                      <div style={{ background:'var(--night3)', border:'1px solid var(--border)', borderRadius:'10px', padding:'14px' }}>
+                        <div style={{ fontSize:'13px', fontWeight:700, color:'var(--white)', fontFamily:'Syne, sans-serif', marginBottom:'10px' }}>
+                          ⭐ Set Up Boost
+                        </div>
+                        <div style={{ marginBottom:'10px' }}>
+                          <label style={{ fontSize:'11px', color:'var(--fog)', display:'block', marginBottom:'4px' }}>
+                            Discount price tonight {h.price_min ? <span style={{ color:'var(--fog)' }}>(must be less than your ${h.price_min} regular rate)</span> : ''}
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={boostPriceInput}
+                            onChange={e => setBoostPriceInput(e.target.value)}
+                            placeholder="e.g. 59"
+                            style={{
+                              width:'100%', background:'var(--night)', border:'1px solid var(--border)',
+                              borderRadius:'8px', padding:'10px 12px', color:'var(--white)',
+                              fontSize:'14px', fontFamily:'DM Sans, sans-serif', boxSizing:'border-box',
+                            }}
+                          />
+                        </div>
+                        <div style={{ marginBottom:'10px' }}>
+                          <label style={{ fontSize:'11px', color:'var(--fog)', display:'block', marginBottom:'4px' }}>
+                            How long?
+                          </label>
+                          <div style={{ display:'flex', gap:'6px' }}>
+                            {[1, 2, 3].map(hr => (
+                              <button
+                                key={hr}
+                                onClick={() => setBoostDuration(hr as 1 | 2 | 3)}
+                                style={{
+                                  flex:1, padding:'10px',
+                                  background: boostDuration === hr ? 'var(--amber)' : 'var(--night)',
+                                  color: boostDuration === hr ? 'var(--night)' : 'var(--mist)',
+                                  border: `1px solid ${boostDuration === hr ? 'var(--amber)' : 'var(--border)'}`,
+                                  borderRadius:'8px', fontWeight:700, fontSize:'13px',
+                                  cursor:'pointer', fontFamily:'Syne, sans-serif',
+                                }}
+                              >
+                                {hr} HR
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <p style={{ fontSize:'10px', color:'var(--fog)', marginBottom:'10px', lineHeight:1.4 }}>
+                          One boost per hotel per day. Your discount price will appear in a pulsating banner above the Call button on driver search. Pricing TBD — your account will be billed when pricing is finalized.
+                        </p>
+                        <div style={{ display:'flex', gap:'8px' }}>
+                          <button
+                            onClick={() => activateBoost(h)}
+                            disabled={
+                              boostBusy ||
+                              !boostPriceInput ||
+                              parseInt(boostPriceInput, 10) <= 0 ||
+                              (h.price_min > 0 && parseInt(boostPriceInput, 10) >= h.price_min)
+                            }
+                            className="btn-amber"
+                            style={{ flex:1, padding:'10px', fontSize:'13px', fontWeight:700, opacity: (!boostPriceInput || parseInt(boostPriceInput, 10) <= 0 || (h.price_min > 0 && parseInt(boostPriceInput, 10) >= h.price_min)) ? 0.5 : 1 }}
+                          >
+                            {boostBusy ? 'Activating…' : `🔥 Activate Boost (${boostDuration} HR)`}
+                          </button>
+                          <button
+                            onClick={() => setBoostingHotelId(null)}
+                            style={{
+                              padding:'10px 14px', background:'var(--night)', color:'var(--mist)',
+                              border:'1px solid var(--border)', borderRadius:'8px', fontSize:'13px', cursor:'pointer',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => openBoostPanel(h)}
+                        style={{
+                          width:'100%', padding:'12px',
+                          background:'rgba(245,166,35,0.10)', color:'var(--amber)',
+                          border:'1px solid var(--amber)', borderRadius:'10px',
+                          fontWeight:700, fontSize:'13px', cursor:'pointer',
+                          fontFamily:'Syne, sans-serif', letterSpacing:'0.5px',
+                        }}
+                      >
+                        ⭐ Boost This Listing — 1×/day
+                      </button>
+                    )}
                   </div>
                   {h.amenities?.length > 0 && (
                     <div style={{ display:'flex', flexWrap:'wrap', gap:'4px', marginTop:'10px' }}>

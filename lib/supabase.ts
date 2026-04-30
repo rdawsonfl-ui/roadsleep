@@ -40,5 +40,10 @@ export type Hotel = {
   verified?: boolean
   last_verified_at?: string | null
   verification_notes?: string | null
+  boost_price?: number | null
+  boost_started_at?: string | null
+  boost_ends_at?: string | null
+  boost_duration_hr?: 1 | 2 | 3 | null
+  last_boost_date?: string | null
   exits?: Exit & { interstates?: Interstate }
 }

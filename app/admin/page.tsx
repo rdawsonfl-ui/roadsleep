@@ -307,7 +307,7 @@ function AdminPageContent() {
                 <h3 style={{ fontSize: '14px', fontFamily: 'Syne, sans-serif', color: 'var(--white)' }}>
                   All Hotels ({hotels.length})
                 </h3>
-                {/* Phone verification progress \u2014 lets admin see at a glance how much work remains */}
+                {/* Phone verification progress — lets admin see at a glance how much work remains */}
                 {hotels.length > 0 && (
                   <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--fog)' }}>
                     <span style={{ color: '#22c55e', fontWeight: 600 }}>
@@ -321,6 +321,29 @@ function AdminPageContent() {
                     <span>only verified hotels appear in driver search</span>
                   </div>
                 )}
+                {/* Boost / billing counters — admin sees who's currently boosted (live)
+                    and who used a boost today (for end-of-day billing). */}
+                {hotels.length > 0 && (() => {
+                  const adminEtToday = new Intl.DateTimeFormat('en-CA', {
+                    timeZone: 'America/New_York',
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                  }).format(new Date())
+                  const liveBoosted = hotels.filter(h =>
+                    h.featured && h.boost_ends_at && new Date(h.boost_ends_at).getTime() > Date.now()
+                  )
+                  const boostedToday = hotels.filter(h => h.last_boost_date === adminEtToday)
+                  return (
+                    <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--fog)' }}>
+                      <span style={{ color: 'var(--amber)', fontWeight: 600 }}>
+                        🔥 {liveBoosted.length} boost{liveBoosted.length === 1 ? '' : 's'} live now
+                      </span>
+                      {' · '}
+                      <span style={{ color: 'var(--white)', fontWeight: 600 }}>
+                        💰 {boostedToday.length} boosted today (bill these)
+                      </span>
+                    </div>
+                  )
+                })()}
               </div>
               {hotels.length === 0 ? (
                 <div style={{ padding: '32px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>No hotels yet</div>
@@ -347,12 +370,23 @@ function AdminPageContent() {
                                 padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
                               }}>⚠ Unverified · hidden from drivers</span>
                             )}
-                            {h.featured && (
-                              <span style={{
-                                fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)',
-                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
-                              }}>★ Boosted</span>
-                            )}
+                            {h.featured && (() => {
+                              const live = h.boost_ends_at && new Date(h.boost_ends_at).getTime() > Date.now()
+                              const minutesLeft = h.boost_ends_at
+                                ? Math.max(0, Math.floor((new Date(h.boost_ends_at).getTime() - Date.now()) / 60000))
+                                : 0
+                              return (
+                                <span style={{
+                                  fontSize: '10px',
+                                  background: live ? 'rgba(245,166,35,0.20)' : 'rgba(245,166,35,0.10)',
+                                  color: 'var(--amber)',
+                                  padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                }}>
+                                  ★ Boosted{h.boost_price ? ` · $${h.boost_price}` : ''}
+                                  {live ? ` · ${minutesLeft}m left` : ''}
+                                </span>
+                              )
+                            })()}
                           </div>
                           {exit && (
                             <p style={{ fontSize: '11px', color: 'var(--fog)' }}>

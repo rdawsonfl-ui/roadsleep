@@ -55,6 +55,10 @@ function SearchResults() {
     if (!interstateId) return
     async function load() {
       setLoading(true)
+      // Lazy boost-expiry: any boost whose end-time has passed flips back to
+      // non-boosted before we read hotels. Cheap, idempotent, no cron needed.
+      // Fire-and-forget — wrap in a real Promise so we can swallow errors safely.
+      try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data: iData } = await supabase.from('interstates').select('*').eq('id', interstateId).single()
       if (iData) setInterstate(iData)
 
@@ -258,13 +262,15 @@ function SearchResults() {
                         </div>
                       )}
 
-                      {/* Boosted hotels with a price get a pulsating amber banner directly above
-                          the Call button. The pulse pulls the eye to the price/CTA pair —
-                          this is the paid placement value-prop for hoteliers. */}
-                      {hotel.featured && (hotel.price_min || hotel.price_max) && (
+                      {/* Boost banner — only renders if the hotelier is currently boosted AND
+                          has set a discount price. Big discount price (boost_price) sits front
+                          and center; their regular nightly rate (price_min) is shown smaller
+                          with strike-through so drivers see the deal at a glance. The pulse
+                          pulls the eye to the price + CTA pair. */}
+                      {hotel.featured && hotel.boost_price && (
                         <div className="boost-pulse" style={{
                           marginBottom: '10px',
-                          padding: '12px 14px',
+                          padding: '14px 14px',
                           borderRadius: '10px',
                           background: 'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
                           color: 'var(--night)',
@@ -273,12 +279,26 @@ function SearchResults() {
                           textAlign: 'center',
                           boxShadow: '0 0 0 0 rgba(245,166,35,0.6)',
                         }}>
-                          <span style={{ fontSize: '11px', letterSpacing: '1px', opacity: 0.85, display: 'block', marginBottom: '2px' }}>
-                            💰 NIGHTLY RATE
+                          <span style={{
+                            fontSize: '10px', letterSpacing: '1.5px', opacity: 0.85,
+                            display: 'block', marginBottom: '4px',
+                          }}>
+                            🔥 LIMITED-TIME DEAL
                           </span>
-                          <span style={{ fontSize: '22px' }}>
-                            ${hotel.price_min}{hotel.price_max && hotel.price_max !== hotel.price_min ? `–$${hotel.price_max}` : ''}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '28px', lineHeight: 1 }}>
+                              ${hotel.boost_price}
+                            </span>
+                            {hotel.price_min && hotel.price_min > hotel.boost_price && (
+                              <span style={{
+                                fontSize: '14px', textDecoration: 'line-through',
+                                opacity: 0.7, fontWeight: 600,
+                              }}>
+                                ${hotel.price_min}
+                              </span>
+                            )}
+                            <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
+                          </div>
                         </div>
                       )}
 
