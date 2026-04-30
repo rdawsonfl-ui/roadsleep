@@ -15,6 +15,10 @@ type Hotel = {
   availability_badge: string | null
   featured: boolean | null
   exit_id: string | null
+  // Boost columns - present on the row when hotelier has activated a boost.
+  // featured doubles as 'currently boosted'; boost_price is the discount.
+  boost_price: number | null
+  boost_ends_at: string | null
   exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; interstates?: { name: string | null } | null } | null
   distance: number | null
 }
@@ -77,9 +81,13 @@ export default function HomePage() {
 
   useEffect(() => {
     ;(async () => {
+      // Lazy boost-expiry: any boost whose end-time has passed flips back to
+      // featured=false before we read hotels. Idempotent, no cron needed.
+      try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured,exit_id,exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured,exit_id,boost_price,boost_ends_at,exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .eq('verified', true)
         .neq('availability_badge', 'full')
         .limit(200)
       if (data) {
@@ -173,12 +181,15 @@ export default function HomePage() {
           const distLabel = h.distance !== null ? `${Math.round(h.distance as number)} mi away` : null
           const exitLabel = h.exits ? `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}` : null
           return (
-            <div key={h.id} style={{ background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
+            <div key={h.id} style={{ background: 'var(--night2)', border: h.featured ? '1px solid rgba(245,166,35,0.4)' : '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
-                {h.featured && <span style={{ fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Featured</span>}
+                {h.featured && <span style={{ fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>★ Boosted</span>}
                 {h.availability_badge === 'available' && <span style={{ fontSize: '10px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Available</span>}
                 {distLabel && <span style={{ fontSize: '11px', color: 'var(--mist)', fontWeight: 600 }}>{distLabel}</span>}
-                <span style={{ marginLeft: 'auto', color: 'var(--amber)', fontWeight: 800, fontSize: '17px', fontStyle: 'italic' }}>{price}</span>
+                {/* Hide the inline price when boosted - it'll show in the big pulsating banner instead */}
+                {!(h.featured && h.boost_price) && (
+                  <span style={{ marginLeft: 'auto', color: 'var(--amber)', fontWeight: 800, fontSize: '17px', fontStyle: 'italic' }}>{price}</span>
+                )}
               </div>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white)', marginBottom: '4px' }}>{h.name}</h3>
               {exitLabel && <p style={{ fontSize: '11px', color: 'var(--fog)', marginBottom: '4px' }}>{exitLabel}</p>}
@@ -188,6 +199,35 @@ export default function HomePage() {
                   {h.amenities.slice(0, 4).map((a) => (
                     <span key={a} style={{ background: 'var(--night3)', color: 'var(--mist)', fontSize: '11px', padding: '4px 9px', borderRadius: '5px' }}>{a}</span>
                   ))}
+                </div>
+              )}
+              {/* Pulsating discount banner — only renders when hotelier has an active boost
+                  AND has set a discount price. Big discount price + regular rate strike-through.
+                  Sits directly above the Call button to drive eyes to the price → CTA pair. */}
+              {h.featured && h.boost_price && (
+                <div className="boost-pulse" style={{
+                  marginBottom: '10px',
+                  padding: '14px 14px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
+                  color: 'var(--night)',
+                  fontFamily: 'Syne, sans-serif',
+                  fontWeight: 700,
+                  textAlign: 'center',
+                  boxShadow: '0 0 0 0 rgba(245,166,35,0.6)',
+                }}>
+                  <span style={{ fontSize: '10px', letterSpacing: '1.5px', opacity: 0.85, display: 'block', marginBottom: '4px' }}>
+                    🔥 LIMITED-TIME DEAL
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '28px', lineHeight: 1 }}>${h.boost_price}</span>
+                    {h.price_min && h.price_min > h.boost_price && (
+                      <span style={{ fontSize: '14px', textDecoration: 'line-through', opacity: 0.7, fontWeight: 600 }}>
+                        ${h.price_min}
+                      </span>
+                    )}
+                    <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
+                  </div>
                 </div>
               )}
               <div style={{ display: 'flex', gap: '8px' }}>
