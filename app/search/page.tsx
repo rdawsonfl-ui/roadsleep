@@ -205,7 +205,7 @@ function SearchResults() {
                         background: 'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
                         color: 'var(--night)', padding: '4px 14px', fontSize: '10px',
                         fontWeight: 700, fontFamily: 'Syne, sans-serif', letterSpacing: '1px',
-                      }}>★ FEATURED</div>
+                      }}>★ BOOSTED</div>
                     )}
                     {hotel.photo_url && (
                       <img src={hotel.photo_url} alt={hotel.name} style={{ width: '100%', height: '140px', objectFit: 'cover' }}/>
@@ -237,7 +237,8 @@ function SearchResults() {
                         }}>{badge.label}</span>
                       </div>
 
-                      {(hotel.price_min || hotel.price_max) && (
+                      {/* When not boosted, show price inline as before (compact, no banner). */}
+                      {!hotel.featured && (hotel.price_min || hotel.price_max) && (
                         <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Syne, sans-serif', color: 'var(--amber)', marginBottom: '10px' }}>
                           ${hotel.price_min}–${hotel.price_max}
                           <span style={{ fontSize: '11px', color: 'var(--fog)', fontWeight: 400, marginLeft: '4px' }}>/ night</span>
@@ -254,6 +255,30 @@ function SearchResults() {
                               {AMENITY_ICONS[a]} {AMENITY_LABELS[a] || a}
                             </span>
                           ))}
+                        </div>
+                      )}
+
+                      {/* Boosted hotels with a price get a pulsating amber banner directly above
+                          the Call button. The pulse pulls the eye to the price/CTA pair —
+                          this is the paid placement value-prop for hoteliers. */}
+                      {hotel.featured && (hotel.price_min || hotel.price_max) && (
+                        <div className="boost-pulse" style={{
+                          marginBottom: '10px',
+                          padding: '12px 14px',
+                          borderRadius: '10px',
+                          background: 'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
+                          color: 'var(--night)',
+                          fontFamily: 'Syne, sans-serif',
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          boxShadow: '0 0 0 0 rgba(245,166,35,0.6)',
+                        }}>
+                          <span style={{ fontSize: '11px', letterSpacing: '1px', opacity: 0.85, display: 'block', marginBottom: '2px' }}>
+                            💰 NIGHTLY RATE
+                          </span>
+                          <span style={{ fontSize: '22px' }}>
+                            ${hotel.price_min}{hotel.price_max && hotel.price_max !== hotel.price_min ? `–$${hotel.price_max}` : ''}
+                          </span>
                         </div>
                       )}
 

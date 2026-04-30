@@ -268,7 +268,7 @@ function AdminPageContent() {
 
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', color: 'var(--mist)', fontSize: '13px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={form.featured} onChange={e => setForm(f => ({ ...f, featured: e.target.checked }))} style={{ accentColor: 'var(--amber)', width: '16px', height: '16px' }}/>
-                ★ Featured listing
+                ★ Boost this listing <span style={{ color: 'var(--fog)', fontSize: '11px' }}>(top placement + pulsating price banner above Call)</span>
               </label>
 
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -351,7 +351,7 @@ function AdminPageContent() {
                               <span style={{
                                 fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)',
                                 padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
-                              }}>★ Featured</span>
+                              }}>★ Boosted</span>
                             )}
                           </div>
                           {exit && (
@@ -385,7 +385,7 @@ function AdminPageContent() {
                               {h.verified ? '⏸ Hide from Drivers' : '✓ Phone OK · Show to Drivers'}
                             </button>
                             <button onClick={() => toggleFeatured(h.id, h.featured)} style={btnGhost}>
-                              {h.featured ? '★ Unfeat' : '☆ Feat'}
+                              {h.featured ? '★ Unboost' : '☆ Boost'}
                             </button>
                             <button onClick={() => editHotel(h)} style={{ ...btnGhost, color: 'var(--blue)' }}>Edit</button>
                             <button onClick={() => deleteHotel(h.id)} style={{ ...btnGhost, color: 'var(--red)' }}>Del</button>

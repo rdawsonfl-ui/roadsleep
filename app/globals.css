@@ -84,3 +84,19 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
   border-radius: 20px;
   border: 1px solid rgba(245, 166, 35, 0.25);
 }
+
+/* Boosted-hotel price banner — gentle pulse to draw the eye toward the
+   hotel's nightly rate sitting above the Call button. ~1.6s cycle so it's
+   noticeable without being annoying on a long scroll. Animation respects
+   reduced-motion preference. */
+@keyframes boost-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(245, 166, 35, 0.55); transform: scale(1); }
+  60%  { box-shadow: 0 0 0 12px rgba(245, 166, 35, 0);    transform: scale(1.015); }
+  100% { box-shadow: 0 0 0 0   rgba(245, 166, 35, 0);    transform: scale(1); }
+}
+.boost-pulse {
+  animation: boost-pulse 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boost-pulse { animation: none; }
+}
