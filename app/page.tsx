@@ -218,10 +218,10 @@ export default function HomePage() {
                   <span style={{ fontSize: '10px', letterSpacing: '1.5px', opacity: 0.9, display: 'block', marginBottom: '6px' }}>
                     🔥 LIMITED-TIME DEAL
                   </span>
-                  {/* Two columns: price on the left, "Say RoadSleep" prompt on the right
-                      with a left-pointing arrow tying the message back to the price.
-                      Dark navy text on red for high readability while still reading "black". */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  {/* Price stays centered/hero. Pitch sits to the right of the price block,
+                      3× the size of the original 11px message, dark navy on red, with a
+                      left arrow tying it back to the price. */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                       <span style={{ fontSize: '28px', lineHeight: 1 }}>${h.boost_price}</span>
                       {h.price_min && h.price_min > h.boost_price && (
@@ -232,11 +232,11 @@ export default function HomePage() {
                       <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
                     </div>
                     <div style={{
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 700,
-                      fontSize: '11px', lineHeight: 1.15, textAlign: 'left',
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 800,
+                      fontSize: '18px', lineHeight: 1.1, textAlign: 'left',
                     }}>
-                      <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">←</span>
+                      <span style={{ fontSize: '24px', lineHeight: 1 }} aria-hidden="true">←</span>
                       <span>Say "RoadSleep"<br/>for this price</span>
                     </div>
                   </div>

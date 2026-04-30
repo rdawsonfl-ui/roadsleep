@@ -274,9 +274,9 @@ function SearchResults() {
                           }}>
                             🔥 LIMITED-TIME DEAL
                           </span>
-                          {/* Two columns: price on the left, "Say RoadSleep" prompt on the right
-                              with a left-pointing arrow tying the message back to the price. */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                          {/* Price stays centered/hero. Pitch sits to the right of the price block,
+                              3× the size of the original 11px message. */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                               <span style={{ fontSize: '28px', lineHeight: 1 }}>
                                 ${hotel.boost_price}
@@ -292,11 +292,11 @@ function SearchResults() {
                               <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
                             </div>
                             <div style={{
-                              display: 'flex', alignItems: 'center', gap: '6px',
-                              color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 700,
-                              fontSize: '11px', lineHeight: 1.15, textAlign: 'left',
+                              display: 'flex', alignItems: 'center', gap: '8px',
+                              color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 800,
+                              fontSize: '18px', lineHeight: 1.1, textAlign: 'left',
                             }}>
-                              <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">←</span>
+                              <span style={{ fontSize: '24px', lineHeight: 1 }} aria-hidden="true">←</span>
                               <span>Say "RoadSleep"<br/>for this price</span>
                             </div>
                           </div>
