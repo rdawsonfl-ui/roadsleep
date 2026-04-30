@@ -307,6 +307,20 @@ function AdminPageContent() {
                 <h3 style={{ fontSize: '14px', fontFamily: 'Syne, sans-serif', color: 'var(--white)' }}>
                   All Hotels ({hotels.length})
                 </h3>
+                {/* Phone verification progress \u2014 lets admin see at a glance how much work remains */}
+                {hotels.length > 0 && (
+                  <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--fog)' }}>
+                    <span style={{ color: '#22c55e', fontWeight: 600 }}>
+                      ✓ {hotels.filter(h => h.verified).length} verified
+                    </span>
+                    {' · '}
+                    <span style={{ color: '#ef4444', fontWeight: 600 }}>
+                      ⚠ {hotels.filter(h => !h.verified).length} need phone verification
+                    </span>
+                    {' · '}
+                    <span>only verified hotels appear in driver search</span>
+                  </div>
+                )}
               </div>
               {hotels.length === 0 ? (
                 <div style={{ padding: '32px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>No hotels yet</div>
@@ -357,10 +371,18 @@ function AdminPageContent() {
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <button
                               onClick={() => toggleVerified(h.id, h.verified || false)}
-                              style={{ ...btnGhost, color: h.verified ? '#ef4444' : '#22c55e', fontWeight: 600 }}
-                              title={h.verified ? 'Mark as needing re-verification' : 'Mark as phone-verified (will be visible to drivers)'}
+                              style={{
+                                ...btnGhost,
+                                background: h.verified ? 'rgba(239,68,68,0.10)' : 'rgba(34,197,94,0.15)',
+                                color: h.verified ? '#ef4444' : '#22c55e',
+                                fontWeight: 700,
+                                border: `1px solid ${h.verified ? '#ef4444' : '#22c55e'}`,
+                              }}
+                              title={h.verified
+                                ? 'Currently visible to drivers. Click to hide (e.g., re-verify needed).'
+                                : 'Click after you have called this hotel and confirmed the phone works. Will become visible to drivers.'}
                             >
-                              {h.verified ? '✗ Unverify' : '✓ Verify'}
+                              {h.verified ? '⏸ Hide from Drivers' : '✓ Phone OK · Show to Drivers'}
                             </button>
                             <button onClick={() => toggleFeatured(h.id, h.featured)} style={btnGhost}>
                               {h.featured ? '★ Unfeat' : '☆ Feat'}
