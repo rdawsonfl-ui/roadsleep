@@ -6,7 +6,6 @@ type HotelPin = {
   name: string
   distance: number
   featured?: boolean
-  availability?: string
 }
 
 type Props = {
@@ -23,13 +22,10 @@ export default function HighwayView({ hotels, maxDistance, direction, onPinClick
   // Scale factor: distance (mi) → px on highway
   const pxPerMile = 600 / cap
 
-  const badgeColor = (b?: string) => {
-    switch (b) {
-      case 'limited': return '#f5a623'
-      case 'full': return '#ff6b6b'
-      default: return '#3ecf8e'
-    }
-  }
+  // Single hotel pin color — used to be tied to availability_badge but that was
+  // removed since hotels won't track real-time availability. Boosted hotels still
+  // use amber to stand out.
+  const pinColor = (featured?: boolean) => featured ? '#f5a623' : '#3ecf8e'
 
   return (
     <div style={{
@@ -156,7 +152,7 @@ export default function HighwayView({ hotels, maxDistance, direction, onPinClick
                   <>
                     <div style={{
                       background: h.featured ? 'linear-gradient(135deg, #f5a623, #e8941a)' : 'var(--night3)',
-                      border: h.featured ? '1px solid #f5a623' : `1px solid ${badgeColor(h.availability)}`,
+                      border: h.featured ? '1px solid #f5a623' : `1px solid ${pinColor(h.featured)}`,
                       borderRadius: '10px',
                       padding: '6px 8px',
                       boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
@@ -164,7 +160,7 @@ export default function HighwayView({ hotels, maxDistance, direction, onPinClick
                     }}>
                       <div style={{
                         fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
-                        color: h.featured ? '#0d0f14' : badgeColor(h.availability),
+                        color: h.featured ? '#0d0f14' : pinColor(h.featured),
                       }}>
                         {h.distance.toFixed(1)} MI
                       </div>
@@ -180,32 +176,32 @@ export default function HighwayView({ hotels, maxDistance, direction, onPinClick
                     {/* tail + pin line */}
                     <div style={{
                       width: '2px', height: '28px',
-                      background: h.featured ? '#f5a623' : badgeColor(h.availability),
+                      background: h.featured ? '#f5a623' : pinColor(h.featured),
                       margin: '0 auto',
                     }} />
                     <div style={{
                       width: '10px', height: '10px', borderRadius: '50%',
-                      background: h.featured ? '#f5a623' : badgeColor(h.availability),
+                      background: h.featured ? '#f5a623' : pinColor(h.featured),
                       margin: '-4px auto 0',
-                      boxShadow: `0 0 8px ${h.featured ? '#f5a623' : badgeColor(h.availability)}`,
+                      boxShadow: `0 0 8px ${h.featured ? '#f5a623' : pinColor(h.featured)}`,
                     }} />
                   </>
                 ) : (
                   <>
                     <div style={{
                       width: '10px', height: '10px', borderRadius: '50%',
-                      background: h.featured ? '#f5a623' : badgeColor(h.availability),
+                      background: h.featured ? '#f5a623' : pinColor(h.featured),
                       margin: '0 auto',
-                      boxShadow: `0 0 8px ${h.featured ? '#f5a623' : badgeColor(h.availability)}`,
+                      boxShadow: `0 0 8px ${h.featured ? '#f5a623' : pinColor(h.featured)}`,
                     }} />
                     <div style={{
                       width: '2px', height: '28px',
-                      background: h.featured ? '#f5a623' : badgeColor(h.availability),
+                      background: h.featured ? '#f5a623' : pinColor(h.featured),
                       margin: '-4px auto 0',
                     }} />
                     <div style={{
                       background: h.featured ? 'linear-gradient(135deg, #f5a623, #e8941a)' : 'var(--night3)',
-                      border: h.featured ? '1px solid #f5a623' : `1px solid ${badgeColor(h.availability)}`,
+                      border: h.featured ? '1px solid #f5a623' : `1px solid ${pinColor(h.featured)}`,
                       borderRadius: '10px',
                       padding: '6px 8px',
                       boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
@@ -213,7 +209,7 @@ export default function HighwayView({ hotels, maxDistance, direction, onPinClick
                     }}>
                       <div style={{
                         fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
-                        color: h.featured ? '#0d0f14' : badgeColor(h.availability),
+                        color: h.featured ? '#0d0f14' : pinColor(h.featured),
                       }}>
                         {h.distance.toFixed(1)} MI
                       </div>

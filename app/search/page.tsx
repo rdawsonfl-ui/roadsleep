@@ -10,11 +10,6 @@ const AMENITY_ICONS: Record<string, string> = {
 const AMENITY_LABELS: Record<string, string> = {
   truck_parking: 'Truck Parking', pets: 'Pets OK', '24hr_checkin': '24hr Check-in', wifi: 'WiFi', pool: 'Pool',
 }
-const BADGE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  available: { bg: 'rgba(62,207,142,0.15)', color: '#3ecf8e', label: '🟢 Likely Available' },
-  limited: { bg: 'rgba(245,166,35,0.15)', color: '#f5a623', label: '🟡 Maybe Full' },
-  full: { bg: 'rgba(255,107,107,0.15)', color: '#ff6b6b', label: '🔴 Often Full' },
-}
 const FILTERS = ['truck_parking', 'pets', '24hr_checkin']
 
 // Haversine distance in miles
@@ -184,7 +179,7 @@ function SearchResults() {
         ) : (
           <>
             <HighwayView
-              hotels={filtered.map(h => ({ id: h.id, name: h.name, distance: h._distance, featured: h.featured, availability: h.availability_badge }))}
+              hotels={filtered.map(h => ({ id: h.id, name: h.name, distance: h._distance, featured: h.featured }))}
               maxDistance={distance}
               direction={direction}
               onPinClick={(id) => router.push(`/hotel/${id}`)}
@@ -194,7 +189,6 @@ function SearchResults() {
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {filtered.map(hotel => {
-                const badge = BADGE_STYLES[hotel.availability_badge] || BADGE_STYLES.available
                 const exit = hotel.exits
                 return (
                   <div key={hotel.id}
@@ -224,21 +218,15 @@ function SearchResults() {
                         📍 {hotel._distance.toFixed(1)} MI AHEAD
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px', gap: '8px' }}>
-                        <div style={{ flex: 1 }}>
-                          <h3 style={{ fontSize: '16px', color: 'var(--white)', fontFamily: 'Syne, sans-serif', marginBottom: '4px' }}>
-                            {hotel.name}
-                          </h3>
-                          {exit && (
-                            <p style={{ fontSize: '11px', color: 'var(--fog)' }}>
-                              {exit.exit_label} · {exit.city}, {exit.state}
-                            </p>
-                          )}
-                        </div>
-                        <span style={{
-                          fontSize: '10px', fontWeight: 600, padding: '4px 8px', borderRadius: '12px',
-                          background: badge.bg, color: badge.color, whiteSpace: 'nowrap',
-                        }}>{badge.label}</span>
+                      <div style={{ marginBottom: '8px' }}>
+                        <h3 style={{ fontSize: '16px', color: 'var(--white)', fontFamily: 'Syne, sans-serif', marginBottom: '4px' }}>
+                          {hotel.name}
+                        </h3>
+                        {exit && (
+                          <p style={{ fontSize: '11px', color: 'var(--fog)' }}>
+                            {exit.exit_label} · {exit.city}, {exit.state}
+                          </p>
+                        )}
                       </div>
 
                       {/* When not boosted, show price inline as before (compact, no banner). */}

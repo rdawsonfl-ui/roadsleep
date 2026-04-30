@@ -12,7 +12,6 @@ type Hotel = {
   price_min: number | null
   price_max: number | null
   amenities: string[] | null
-  availability_badge: string | null
   featured: boolean | null
   exit_id: string | null
   // Boost columns - present on the row when hotelier has activated a boost.
@@ -86,9 +85,8 @@ export default function HomePage() {
       try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,availability_badge,featured,exit_id,boost_price,boost_ends_at,exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,exits(lat,lng,city,state,mile_marker,interstates(name))')
         .eq('verified', true)
-        .neq('availability_badge', 'full')
         .limit(200)
       if (data) {
         const withNullDist: Hotel[] = (data as any[]).map((h) => ({ ...h, distance: null }))
@@ -184,7 +182,6 @@ export default function HomePage() {
             <div key={h.id} style={{ background: 'var(--night2)', border: h.featured ? '1px solid rgba(245,166,35,0.4)' : '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                 {h.featured && <span style={{ fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>★ Boosted</span>}
-                {h.availability_badge === 'available' && <span style={{ fontSize: '10px', background: 'rgba(34,197,94,0.15)', color: 'var(--green)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Available</span>}
                 {distLabel && <span style={{ fontSize: '11px', color: 'var(--mist)', fontWeight: 600 }}>{distLabel}</span>}
                 {/* Hide the inline price when boosted - it'll show in the big pulsating banner instead */}
                 {!(h.featured && h.boost_price) && (

@@ -7,7 +7,7 @@ type Hotel = {
   id: string; name: string; phone: string; address: string
   price_min: number; price_max: number; description: string
   check_in_time: string; check_out_time: string; website: string
-  amenities: string[]; availability_badge: string; featured: boolean
+  amenities: string[]; featured: boolean
   exit_id?: string
   // Boost columns — match the DB schema added in the boost migration.
   // featured doubles as "boost is on right now"; the rest add the time/price/limit logic.
@@ -64,7 +64,7 @@ export default function HotelierPortal() {
   const [hotelForm, setHotelForm]   = useState<Partial<Hotel>>({
     name:'', phone:'', address:'', price_min:0, price_max:0,
     description:'', check_in_time:'3:00 PM', check_out_time:'11:00 AM',
-    website:'', amenities:[], availability_badge:'available', exit_id:'',
+    website:'', amenities:[], exit_id:'',
   })
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function HotelierPortal() {
 
   function startNew() {
     setHotelForm({ name:'', phone:'', address:'', price_min:0, price_max:0, description:'',
-      check_in_time:'3:00 PM', check_out_time:'11:00 AM', website:'', amenities:[], availability_badge:'available', exit_id:'' })
+      check_in_time:'3:00 PM', check_out_time:'11:00 AM', website:'', amenities:[], exit_id:'' })
     setView('new'); setMsg(''); setErr('')
   }
 
@@ -165,7 +165,7 @@ export default function HotelierPortal() {
       price_min: Number(hotelForm.price_min)||0, price_max: Number(hotelForm.price_max)||0,
       description: hotelForm.description, check_in_time: hotelForm.check_in_time,
       check_out_time: hotelForm.check_out_time, website: hotelForm.website,
-      amenities: hotelForm.amenities||[], availability_badge: hotelForm.availability_badge,
+      amenities: hotelForm.amenities||[],
       exit_id: hotelForm.exit_id,
       hotelier_id: hotelier.id, updated_at: new Date().toISOString(),
     }
@@ -393,24 +393,6 @@ export default function HotelierPortal() {
                   }}>{a.label}</button>
                 )
               })}
-            </div>
-          </Section>
-          <Section title="🟢 Availability Status">
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px' }}>
-              {[
-                { value:'available', label:'🟢 Usually Available', desc:'Rooms typically open' },
-                { value:'limited',   label:'🟡 Often Busy',        desc:'Call ahead' },
-                { value:'full',      label:'🔴 Often Full',        desc:'Book early' },
-              ].map(opt => (
-                <button key={opt.value} type="button" onClick={() => setHotelForm(f=>({...f,availability_badge:opt.value}))} style={{
-                  padding:'12px 10px', borderRadius:'10px', cursor:'pointer', textAlign:'center', transition:'all 0.15s',
-                  border:     hotelForm.availability_badge===opt.value ? '1px solid var(--amber)' : '1px solid var(--border)',
-                  background: hotelForm.availability_badge===opt.value ? 'rgba(245,166,35,0.1)'  : 'var(--night3)',
-                }}>
-                  <div style={{ fontSize:'12px', fontWeight:600, color: hotelForm.availability_badge===opt.value ? 'var(--amber)':'var(--mist)', marginBottom:'2px' }}>{opt.label}</div>
-                  <div style={{ fontSize:'10px', color:'var(--fog)' }}>{opt.desc}</div>
-                </button>
-              ))}
             </div>
           </Section>
           {err && <ErrBox msg={err} />}

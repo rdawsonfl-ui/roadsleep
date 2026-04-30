@@ -15,7 +15,7 @@ const AMENITY_OPTIONS = [
 
 const emptyHotel = {
   name: '', phone: '', address: '', price_min: '', price_max: '',
-  amenities: [] as string[], availability_badge: 'available', featured: false,
+  amenities: [] as string[], featured: false,
   photo_url: '', exit_id: ''
 }
 
@@ -69,7 +69,7 @@ function AdminPageContent() {
       name: form.name, phone: form.phone, address: form.address,
       price_min: form.price_min ? parseInt(form.price_min) : null,
       price_max: form.price_max ? parseInt(form.price_max) : null,
-      amenities: form.amenities, availability_badge: form.availability_badge,
+      amenities: form.amenities,
       featured: form.featured, photo_url: form.photo_url, exit_id: form.exit_id,
     }
     if (editId) {
@@ -92,7 +92,7 @@ function AdminPageContent() {
     setForm({
       name: h.name, phone: h.phone || '', address: h.address || '',
       price_min: h.price_min?.toString() || '', price_max: h.price_max?.toString() || '',
-      amenities: h.amenities || [], availability_badge: h.availability_badge || 'available',
+      amenities: h.amenities || [],
       featured: h.featured || false, photo_url: h.photo_url || '', exit_id: h.exit_id,
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -108,7 +108,6 @@ function AdminPageContent() {
         name, phone, address, exit_id,
         price_min: price_min ? parseInt(price_min) : null,
         price_max: price_max ? parseInt(price_max) : null,
-        availability_badge: 'available',
       })
       count++
     }
@@ -151,10 +150,6 @@ function AdminPageContent() {
       last_verified_at: next ? new Date().toISOString() : null,
     }).eq('id', id)
     loadAll()
-  }
-
-  async function updateBadge(id: string, badge: string) {
-    await supabase.from('hotels').update({ availability_badge: badge }).eq('id', id); loadAll()
   }
 
   const toggleAmenity = (key: string) => {
@@ -234,14 +229,6 @@ function AdminPageContent() {
                 <div>
                   <label className="dark-label">Price Max ($/night)</label>
                   <input className="dark-input" type="number" value={form.price_max} onChange={e => setForm(f => ({ ...f, price_max: e.target.value }))} placeholder="89"/>
-                </div>
-                <div>
-                  <label className="dark-label">Availability</label>
-                  <select className="dark-input" value={form.availability_badge} onChange={e => setForm(f => ({ ...f, availability_badge: e.target.value }))}>
-                    <option value="available">🟢 Likely Available</option>
-                    <option value="limited">🟡 Maybe Full</option>
-                    <option value="full">🔴 Often Full</option>
-                  </select>
                 </div>
                 <div>
                   <label className="dark-label">Photo URL</label>
@@ -396,12 +383,6 @@ function AdminPageContent() {
                           <p style={{ fontSize: '11px', color: 'var(--mist)' }}>{h.phone}</p>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
-                          <select value={h.availability_badge || 'available'} onChange={e => updateBadge(h.id, e.target.value)}
-                            style={{ ...btnGhost, background: 'var(--night3)' }}>
-                            <option value="available">🟢 Available</option>
-                            <option value="limited">🟡 Limited</option>
-                            <option value="full">🔴 Full</option>
-                          </select>
                           <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <button
                               onClick={() => toggleVerified(h.id, h.verified || false)}

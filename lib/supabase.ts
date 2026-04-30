@@ -34,7 +34,6 @@ export type Hotel = {
   price_min: number
   price_max: number
   amenities: string[]
-  availability_badge: 'available' | 'limited' | 'full'
   featured: boolean
   photo_url: string
   verified?: boolean
