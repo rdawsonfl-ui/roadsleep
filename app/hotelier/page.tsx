@@ -41,14 +41,8 @@ const AMENITY_OPTIONS = [
   { key: 'ac',            label: '❄️ A/C' },
 ]
 
-function hashPassword(pw: string): string {
-  let h = 0
-  for (let i = 0; i < pw.length; i++) { h = (Math.imul(31, h) + pw.charCodeAt(i)) | 0 }
-  return 'hash_' + Math.abs(h).toString(16) + '_' + pw.length
-}
-
 export default function HotelierPortal() {
-  const [mode, setMode]             = useState<'login'|'signup'>('login')
+  const [mode, setMode]             = useState<'login'|'signup'|'forgot'>('login')
   const [hotelier, setHotelier]     = useState<Hotelier | null>(null)
   const [hotels, setHotels]         = useState<Hotel[]>([])
   const [exits, setExits]           = useState<ExitOption[]>([])
@@ -60,6 +54,7 @@ export default function HotelierPortal() {
   const [saving, setSaving]         = useState(false)
   const [msg, setMsg]               = useState('')
   const [err, setErr]               = useState('')
+  const [authBusy, setAuthBusy]     = useState(false)
   const [authForm, setAuthForm]     = useState({ email:'', password:'', name:'', business_phone:'' })
   const [hotelForm, setHotelForm]   = useState<Partial<Hotel>>({
     name:'', phone:'', address:'', price_min:0, price_max:0,
@@ -67,11 +62,77 @@ export default function HotelierPortal() {
     website:'', amenities:[], exit_id:'',
   })
 
-  useEffect(() => {
-    const stored = localStorage.getItem('hotelier_session')
-    if (stored) {
-      try { const h = JSON.parse(stored); setHotelier(h); loadAll(h.id) } catch {}
+  // Look up the hoteliers row for the currently-authenticated Supabase user.
+  // For brand-new users, this row is created at signup. For pre-existing
+  // hoteliers (created before we switched to Supabase Auth), the row already
+  // exists keyed by email — we link auth_user_id on first successful login.
+  async function resolveHotelierForAuthUser(authUser: { id: string; email?: string }) {
+    if (!authUser.email) return null
+    const email = authUser.email.toLowerCase().trim()
+    // Try direct link first (post-signup users)
+    let { data: row } = await supabase
+      .from('hoteliers')
+      .select('id, email, name, business_phone, auth_user_id')
+      .eq('auth_user_id', authUser.id)
+      .maybeSingle()
+    if (row) return row
+    // Fall back to email match (legacy users — link them now)
+    const { data: byEmail } = await supabase
+      .from('hoteliers')
+      .select('id, email, name, business_phone, auth_user_id')
+      .eq('email', email)
+      .maybeSingle()
+    if (byEmail) {
+      // Self-heal: stamp the auth link so future logins skip this branch
+      if (!byEmail.auth_user_id) {
+        await supabase.from('hoteliers').update({ auth_user_id: authUser.id }).eq('id', byEmail.id)
+      }
+      return byEmail
     }
+    return null
+  }
+
+  // Single source of truth for "is the user logged in" — driven entirely by
+  // supabase.auth (cookies). On mount we read whatever session exists, then
+  // subscribe to changes so logout from another tab works too.
+  useEffect(() => {
+    let cancelled = false
+
+    async function hydrateFromSession() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (!session?.user) { setHotelier(null); return }
+      const row = await resolveHotelierForAuthUser(session.user as { id: string; email?: string })
+      if (cancelled) return
+      if (row) {
+        const h: Hotelier = {
+          id: row.id, email: row.email || '', name: row.name || '',
+          business_phone: row.business_phone || '',
+        }
+        setHotelier(h); loadAll(h.id)
+      } else {
+        // Logged in to Supabase Auth but no hoteliers row yet — happens if signup
+        // email-confirm completes on another device. Stay on login screen with a hint.
+        setHotelier(null)
+        setErr('Logged in but no hotelier profile found for this email. Contact support.')
+      }
+    }
+
+    hydrateFromSession()
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) { setHotelier(null); return }
+      // Re-hydrate the hotelier row whenever auth state flips
+      resolveHotelierForAuthUser(session.user as { id: string; email?: string }).then(row => {
+        if (!row) { setHotelier(null); return }
+        const h: Hotelier = {
+          id: row.id, email: row.email || '', name: row.name || '',
+          business_phone: row.business_phone || '',
+        }
+        setHotelier(h); loadAll(h.id)
+      })
+    })
+    return () => { cancelled = true; sub?.subscription.unsubscribe() }
   }, [])
 
   async function loadAll(hotelierId: string) {
@@ -109,37 +170,111 @@ export default function HotelierPortal() {
     setStats(statsMap)
   }
 
+  // Sign up via Supabase Auth, then create the hoteliers profile row linked
+  // to the new auth.users entry. With email confirmation ON, the user gets
+  // a verification email; auth state flips after they click it.
   async function handleSignup(e: React.FormEvent) {
-    e.preventDefault(); setErr('')
-    if (!authForm.email || !authForm.password || !authForm.name) { setErr('Please fill in all required fields'); return }
-    const { data: existing } = await supabase.from('hoteliers').select('id').eq('email', authForm.email.toLowerCase()).single()
-    if (existing) { setErr('Email already registered. Please log in.'); return }
-    const { data, error } = await supabase.from('hoteliers').insert({
-      email: authForm.email.toLowerCase().trim(),
-      password_hash: hashPassword(authForm.password),
-      name: authForm.name.trim(),
-      business_phone: authForm.business_phone.trim(),
-    }).select().single()
-    if (error || !data) { setErr('Signup failed. Please try again.'); return }
-    const h = { id: data.id, email: data.email, name: data.name, business_phone: data.business_phone }
-    localStorage.setItem('hotelier_session', JSON.stringify(h))
-    setHotelier(h); loadAll(h.id); setView('new')
-    setMsg('Account created! Add your first hotel below.')
+    e.preventDefault(); setErr(''); setMsg('')
+    if (!authForm.email || !authForm.password || !authForm.name) {
+      setErr('Please fill in all required fields'); return
+    }
+    if (authForm.password.length < 6) { setErr('Password must be at least 6 characters'); return }
+    setAuthBusy(true)
+    const email = authForm.email.toLowerCase().trim()
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: authForm.password,
+      options: {
+        emailRedirectTo: typeof window !== 'undefined'
+          ? `${window.location.origin}/hotelier`
+          : undefined,
+      },
+    })
+    setAuthBusy(false)
+    if (error) { setErr(error.message); return }
+    if (!data.user) { setErr('Signup failed. Please try again.'); return }
+
+    // Create the hoteliers profile row linked to the new auth user.
+    // If a row with this email already existed (legacy signup), keep it and
+    // just stamp auth_user_id so the user joins their old data automatically.
+    const { data: existing } = await supabase
+      .from('hoteliers')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle()
+    if (existing) {
+      await supabase.from('hoteliers').update({
+        auth_user_id: data.user.id,
+        name: authForm.name.trim(),
+        business_phone: authForm.business_phone.trim(),
+      }).eq('id', existing.id)
+    } else {
+      await supabase.from('hoteliers').insert({
+        auth_user_id: data.user.id,
+        email,
+        name: authForm.name.trim(),
+        business_phone: authForm.business_phone.trim(),
+        // password_hash is left blank — we no longer use it. The column is
+        // kept for one or two releases as a zero-risk migration cushion.
+        password_hash: 'supabase_auth',
+      })
+    }
+
+    if (data.session) {
+      // Email confirmation disabled — they're logged in immediately
+      setMsg('Account created! Loading your dashboard…')
+    } else {
+      // Email confirmation enabled — they need to click the link in the email
+      setMsg(`✓ Account created! Check ${email} for a confirmation link, then come back and log in.`)
+      setMode('login')
+    }
   }
 
+  // Standard email/password login. The auth state listener in useEffect picks
+  // up the new session and hydrates the hoteliers row automatically.
   async function handleLogin(e: React.FormEvent) {
-    e.preventDefault(); setErr('')
-    const { data, error } = await supabase.from('hoteliers')
-      .select('*').eq('email', authForm.email.toLowerCase().trim())
-      .eq('password_hash', hashPassword(authForm.password)).single()
-    if (error || !data) { setErr('Invalid email or password'); return }
-    const h = { id: data.id, email: data.email, name: data.name, business_phone: data.business_phone }
-    localStorage.setItem('hotelier_session', JSON.stringify(h))
-    setHotelier(h); loadAll(h.id)
+    e.preventDefault(); setErr(''); setMsg('')
+    if (!authForm.email || !authForm.password) { setErr('Email and password required'); return }
+    setAuthBusy(true)
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authForm.email.toLowerCase().trim(),
+      password: authForm.password,
+    })
+    setAuthBusy(false)
+    if (error) {
+      // Friendlier error messages
+      if (error.message.toLowerCase().includes('confirm')) {
+        setErr('Please confirm your email first. Check your inbox for a verification link.')
+      } else {
+        setErr('Invalid email or password.')
+      }
+      return
+    }
+    // Success — the auth listener will load the dashboard
   }
 
-  function logout() {
-    localStorage.removeItem('hotelier_session')
+  // Forgot-password flow: sends a reset link to the user's email. Clicking
+  // the link returns them to /hotelier/reset-password with an active session
+  // where they can set a new password.
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault(); setErr(''); setMsg('')
+    if (!authForm.email) { setErr('Enter your email address.'); return }
+    setAuthBusy(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      authForm.email.toLowerCase().trim(),
+      {
+        redirectTo: typeof window !== 'undefined'
+          ? `${window.location.origin}/hotelier/reset-password`
+          : undefined,
+      }
+    )
+    setAuthBusy(false)
+    if (error) { setErr(error.message); return }
+    setMsg('✓ Reset link sent! Check your email and click the link to set a new password.')
+  }
+
+  async function logout() {
+    await supabase.auth.signOut()
     setHotelier(null); setHotels([]); setStats({}); setView('dashboard'); setMsg('')
   }
 
@@ -295,7 +430,7 @@ export default function HotelierPortal() {
         </div>
         <div style={{ display:'flex', background:'var(--night2)', border:'1px solid var(--border)', borderRadius:'10px', padding:'4px', marginBottom:'20px' }}>
           {(['login','signup'] as const).map(m => (
-            <button key={m} onClick={() => { setMode(m); setErr('') }} style={{
+            <button key={m} onClick={() => { setMode(m); setErr(''); setMsg('') }} style={{
               flex:1, padding:'10px', border:'none', borderRadius:'7px', cursor:'pointer',
               fontFamily:'Syne, sans-serif', fontWeight:700, fontSize:'13px', transition:'all 0.15s',
               background: mode===m ? 'var(--amber)' : 'transparent',
@@ -303,22 +438,56 @@ export default function HotelierPortal() {
             }}>{m === 'login' ? 'Log In' : 'Sign Up'}</button>
           ))}
         </div>
-        <form onSubmit={mode==='login' ? handleLogin : handleSignup}
-          style={{ background:'var(--night2)', border:'1px solid var(--border)', borderRadius:'16px', padding:'24px' }}>
+        <form
+          onSubmit={
+            mode === 'forgot' ? handleForgotPassword :
+            mode === 'login'  ? handleLogin :
+            handleSignup
+          }
+          style={{ background:'var(--night2)', border:'1px solid var(--border)', borderRadius:'16px', padding:'24px' }}
+        >
+          {mode === 'forgot' && (
+            <p style={{ fontSize:'12px', color:'var(--mist)', marginBottom:'14px', lineHeight:1.5 }}>
+              Enter your email and we&apos;ll send you a link to reset your password.
+            </p>
+          )}
           {mode === 'signup' && <>
             <Field label="Your Name *" value={authForm.name} onChange={v => setAuthForm(f=>({...f,name:v}))} placeholder="Jane Smith" />
             <Field label="Business Phone" value={authForm.business_phone} onChange={v => setAuthForm(f=>({...f,business_phone:v}))} placeholder="(555) 000-0000" type="tel" />
           </>}
           <Field label="Email Address *" value={authForm.email} onChange={v => setAuthForm(f=>({...f,email:v}))} placeholder="you@yourhotel.com" type="email" />
-          <Field label="Password *" value={authForm.password} onChange={v => setAuthForm(f=>({...f,password:v}))} placeholder="••••••••" type="password" />
+          {mode !== 'forgot' && (
+            <Field label="Password *" value={authForm.password} onChange={v => setAuthForm(f=>({...f,password:v}))} placeholder="••••••••" type="password" />
+          )}
           {err && <ErrBox msg={err} />}
-          <button type="submit" className="btn-amber" style={{ width:'100%', padding:'14px', fontSize:'14px', letterSpacing:'0.5px' }}>
-            {mode==='login' ? 'LOG IN →' : 'CREATE ACCOUNT →'}
+          {msg && (
+            <div style={{
+              background:'rgba(34,197,94,0.10)', border:'1px solid rgba(34,197,94,0.4)',
+              color:'#22c55e', borderRadius:'8px', padding:'10px 12px', marginBottom:'12px',
+              fontSize:'12px', lineHeight:1.4,
+            }}>{msg}</div>
+          )}
+          <button type="submit" disabled={authBusy} className="btn-amber" style={{ width:'100%', padding:'14px', fontSize:'14px', letterSpacing:'0.5px', opacity: authBusy ? 0.6 : 1 }}>
+            {authBusy ? 'WORKING…' :
+              mode === 'forgot' ? 'SEND RESET LINK →' :
+              mode === 'login'  ? 'LOG IN →' :
+              'CREATE ACCOUNT →'}
           </button>
-          {mode==='login' && (
-            <p style={{ textAlign:'center', marginTop:'16px', fontSize:'12px', color:'var(--fog)' }}>
-              No account?{' '}
-              <button type="button" onClick={() => setMode('signup')} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'12px', textDecoration:'underline' }}>Sign up free</button>
+          {mode === 'login' && (
+            <div style={{ textAlign:'center', marginTop:'14px', display:'flex', flexDirection:'column', gap:'6px' }}>
+              <button type="button" onClick={() => { setMode('forgot'); setErr(''); setMsg('') }} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'12px', textDecoration:'underline' }}>
+                Forgot your password?
+              </button>
+              <p style={{ fontSize:'12px', color:'var(--fog)', margin:0 }}>
+                No account?{' '}
+                <button type="button" onClick={() => { setMode('signup'); setErr(''); setMsg('') }} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'12px', textDecoration:'underline' }}>Sign up free</button>
+              </p>
+            </div>
+          )}
+          {mode === 'forgot' && (
+            <p style={{ textAlign:'center', marginTop:'14px', fontSize:'12px', color:'var(--fog)' }}>
+              Remembered it?{' '}
+              <button type="button" onClick={() => { setMode('login'); setErr(''); setMsg('') }} style={{ background:'none', border:'none', color:'var(--amber)', cursor:'pointer', fontSize:'12px', textDecoration:'underline' }}>Back to log in</button>
             </p>
           )}
         </form>
