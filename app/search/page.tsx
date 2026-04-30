@@ -269,24 +269,36 @@ function SearchResults() {
                           boxShadow: '0 0 0 0 rgba(220,38,38,0.65)',
                         }}>
                           <span style={{
-                            fontSize: '10px', letterSpacing: '1.5px', opacity: 0.85,
-                            display: 'block', marginBottom: '4px',
+                            fontSize: '10px', letterSpacing: '1.5px', opacity: 0.9,
+                            display: 'block', marginBottom: '6px',
                           }}>
                             🔥 LIMITED-TIME DEAL
                           </span>
-                          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '28px', lineHeight: 1 }}>
-                              ${hotel.boost_price}
-                            </span>
-                            {hotel.price_min && hotel.price_min > hotel.boost_price && (
-                              <span style={{
-                                fontSize: '14px', textDecoration: 'line-through',
-                                opacity: 0.7, fontWeight: 600,
-                              }}>
-                                ${hotel.price_min}
+                          {/* Two columns: price on the left, "Say RoadSleep" prompt on the right
+                              with a left-pointing arrow tying the message back to the price. */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                              <span style={{ fontSize: '28px', lineHeight: 1 }}>
+                                ${hotel.boost_price}
                               </span>
-                            )}
-                            <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
+                              {hotel.price_min && hotel.price_min > hotel.boost_price && (
+                                <span style={{
+                                  fontSize: '14px', textDecoration: 'line-through',
+                                  opacity: 0.75, fontWeight: 600,
+                                }}>
+                                  ${hotel.price_min}
+                                </span>
+                              )}
+                              <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
+                            </div>
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: '6px',
+                              color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 700,
+                              fontSize: '11px', lineHeight: 1.15, textAlign: 'left',
+                            }}>
+                              <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">←</span>
+                              <span>Say "RoadSleep"<br/>for this price</span>
+                            </div>
                           </div>
                         </div>
                       )}
