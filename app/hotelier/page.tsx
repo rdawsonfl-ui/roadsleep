@@ -8,6 +8,18 @@ type Hotel = {
   price_min: number; price_max: number; description: string
   check_in_time: string; check_out_time: string; website: string
   amenities: string[]; availability_badge: string; featured: boolean
+  exit_id?: string
+}
+// Mirrors what the admin panel selects: each exit row carries the parent
+// interstate so we can render "I-75 N · MM 143 · Punta Gorda, FL" in one dropdown.
+type ExitOption = {
+  id: string
+  direction: string
+  exit_label: string | null
+  mile_marker: number
+  city: string | null
+  state: string | null
+  interstates: { name: string } | null
 }
 type CallStat = { calls_today: number; calls_month: number; calls_total: number; revenue_month: number }
 
@@ -32,6 +44,7 @@ export default function HotelierPortal() {
   const [mode, setMode]             = useState<'login'|'signup'>('login')
   const [hotelier, setHotelier]     = useState<Hotelier | null>(null)
   const [hotels, setHotels]         = useState<Hotel[]>([])
+  const [exits, setExits]           = useState<ExitOption[]>([])
   const [stats, setStats]           = useState<Record<string, CallStat>>({})
   const [rate, setRate]             = useState(5)
   const [billingType, setBillingType] = useState<'per_call'|'monthly'>('per_call')
@@ -44,7 +57,7 @@ export default function HotelierPortal() {
   const [hotelForm, setHotelForm]   = useState<Partial<Hotel>>({
     name:'', phone:'', address:'', price_min:0, price_max:0,
     description:'', check_in_time:'3:00 PM', check_out_time:'11:00 AM',
-    website:'', amenities:[], availability_badge:'available',
+    website:'', amenities:[], availability_badge:'available', exit_id:'',
   })
 
   useEffect(() => {
@@ -55,14 +68,18 @@ export default function HotelierPortal() {
   }, [])
 
   async function loadAll(hotelierId: string) {
-    const [{ data: hotelsData }, { data: callData }, { data: hData }] = await Promise.all([
+    const [{ data: hotelsData }, { data: callData }, { data: hData }, { data: exitsData }] = await Promise.all([
       supabase.from('hotels').select('*').eq('hotelier_id', hotelierId),
       supabase.from('call_logs').select('hotel_id, called_at').eq('hotelier_id', hotelierId),
       supabase.from('hoteliers').select('rate, billing_type').eq('id', hotelierId).single(),
+      // Same shape as admin panel — one row per exit, with parent interstate name joined.
+      // Sorted so the dropdown reads naturally: I-10 first, then I-75, then I-95, etc.
+      supabase.from('exits').select('id, direction, exit_label, mile_marker, city, state, interstates(name)').order('mile_marker'),
     ])
     const hotelList = hotelsData || []
     const calls = callData || []
     setHotels(hotelList)
+    setExits((exitsData as unknown as ExitOption[]) || [])
     if (hData) { setRate(hData.rate || 5); setBillingType(hData.billing_type || 'per_call') }
 
     const now        = new Date()
@@ -125,13 +142,16 @@ export default function HotelierPortal() {
 
   function startNew() {
     setHotelForm({ name:'', phone:'', address:'', price_min:0, price_max:0, description:'',
-      check_in_time:'3:00 PM', check_out_time:'11:00 AM', website:'', amenities:[], availability_badge:'available' })
+      check_in_time:'3:00 PM', check_out_time:'11:00 AM', website:'', amenities:[], availability_badge:'available', exit_id:'' })
     setView('new'); setMsg(''); setErr('')
   }
 
   async function saveHotel(e: React.FormEvent) {
     e.preventDefault()
     if (!hotelier) return
+    // Exit is required — without it, the hotel can't appear in any highway
+    // search result, so we block save just like admin does.
+    if (!hotelForm.exit_id) { setErr('Please select your highway exit.'); return }
     setSaving(true); setErr(''); setMsg('')
     const payload = {
       name: hotelForm.name, phone: hotelForm.phone, address: hotelForm.address,
@@ -139,6 +159,7 @@ export default function HotelierPortal() {
       description: hotelForm.description, check_in_time: hotelForm.check_in_time,
       check_out_time: hotelForm.check_out_time, website: hotelForm.website,
       amenities: hotelForm.amenities||[], availability_badge: hotelForm.availability_badge,
+      exit_id: hotelForm.exit_id,
       hotelier_id: hotelier.id, updated_at: new Date().toISOString(),
     }
     if (view === 'edit' && selectedHotel) {
@@ -222,6 +243,24 @@ export default function HotelierPortal() {
             <Field label="Phone Number *" value={hotelForm.phone||''} onChange={v=>setHotelForm(f=>({...f,phone:v}))} placeholder="(555) 123-4567" type="tel" />
             <Field label="Street Address" value={hotelForm.address||''} onChange={v=>setHotelForm(f=>({...f,address:v}))} placeholder="1234 Highway Dr, City, FL 12345" />
             <Field label="Website (optional)" value={hotelForm.website||''} onChange={v=>setHotelForm(f=>({...f,website:v}))} placeholder="https://www.yourmotel.com" type="url" />
+          </Section>
+          <Section title="🛣️ Highway Exit">
+            <label className="dark-label">Which exit are you off of? *</label>
+            <select
+              value={hotelForm.exit_id||''}
+              onChange={e=>setHotelForm(f=>({...f,exit_id:e.target.value}))}
+              style={{ width:'100%', background:'var(--night3)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px', color:'var(--white)', fontSize:'14px', fontFamily:'DM Sans, sans-serif', boxSizing:'border-box', appearance:'auto' }}
+            >
+              <option value="">Select your exit...</option>
+              {exits.map(ex => (
+                <option key={ex.id} value={ex.id}>
+                  {ex.interstates?.name || '?'} {ex.direction} · MM {ex.mile_marker}{ex.exit_label ? ` (Exit ${ex.exit_label})` : ''} · {ex.city}, {ex.state}
+                </option>
+              ))}
+            </select>
+            <p style={{ fontSize:'11px', color:'var(--fog)', marginTop:'8px', lineHeight:1.4 }}>
+              Drivers searching by highway and mile marker will only find your hotel if you select your exit here.
+            </p>
           </Section>
           <Section title="📝 Description">
             <label className="dark-label">Tell drivers about your property</label>
