@@ -85,17 +85,17 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
   border: 1px solid rgba(245, 166, 35, 0.25);
 }
 
-/* Boosted-hotel price banner — gentle pulse to draw the eye toward the
-   hotel's nightly rate sitting above the Call button. ~1.6s cycle so it's
-   noticeable without being annoying on a long scroll. Animation respects
-   reduced-motion preference. */
+/* Boosted-hotel price banner — fast urgency pulse to draw the eye toward the
+   hotel's discount price sitting above the Call button. 0.53s cycle (3× the
+   previous speed) so it reads as "act now". Animation respects reduced-motion
+   preference. The shadow ring uses red so it pops off any banner background. */
 @keyframes boost-pulse {
-  0%   { box-shadow: 0 0 0 0   rgba(245, 166, 35, 0.55); transform: scale(1); }
-  60%  { box-shadow: 0 0 0 12px rgba(245, 166, 35, 0);    transform: scale(1.015); }
-  100% { box-shadow: 0 0 0 0   rgba(245, 166, 35, 0);    transform: scale(1); }
+  0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0.65); transform: scale(1); }
+  60%  { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0);   transform: scale(1.02); }
+  100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0);    transform: scale(1); }
 }
 .boost-pulse {
-  animation: boost-pulse 1.6s ease-in-out infinite;
+  animation: boost-pulse 0.53s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .boost-pulse { animation: none; }

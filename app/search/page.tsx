@@ -260,12 +260,13 @@ function SearchResults() {
                           marginBottom: '10px',
                           padding: '14px 14px',
                           borderRadius: '10px',
-                          background: 'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
-                          color: 'var(--night)',
+                          // Red gradient — sale/urgency color, contrasts with amber brand
+                          background: 'linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)',
+                          color: '#fff',
                           fontFamily: 'Syne, sans-serif',
                           fontWeight: 700,
                           textAlign: 'center',
-                          boxShadow: '0 0 0 0 rgba(245,166,35,0.6)',
+                          boxShadow: '0 0 0 0 rgba(220,38,38,0.65)',
                         }}>
                           <span style={{
                             fontSize: '10px', letterSpacing: '1.5px', opacity: 0.85,
