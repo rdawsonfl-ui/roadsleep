@@ -87,10 +87,13 @@ function SearchResults() {
       if (aheadExits.length === 0) { setHotels([]); setLoading(false); return }
 
       const exitIds = aheadExits.map(e => e.id)
+      // Drivers only see verified hotels. Unverified entries are still visible to admins
+      // and hoteliers in their dashboards so they can be confirmed and turned on.
       const { data: hotelData } = await supabase
         .from('hotels')
         .select('*, exits(*, interstates(*))')
         .in('exit_id', exitIds)
+        .eq('verified', true)
 
       const enriched = (hotelData || []).map(h => {
         const exit = aheadExits.find(e => e.id === h.exit_id)

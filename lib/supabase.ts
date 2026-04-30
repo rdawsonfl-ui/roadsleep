@@ -37,5 +37,8 @@ export type Hotel = {
   availability_badge: 'available' | 'limited' | 'full'
   featured: boolean
   photo_url: string
+  verified?: boolean
+  last_verified_at?: string | null
+  verification_notes?: string | null
   exits?: Exit & { interstates?: Interstate }
 }

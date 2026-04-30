@@ -142,6 +142,17 @@ function AdminPageContent() {
     await supabase.from('hotels').update({ featured: !val }).eq('id', id); loadAll()
   }
 
+  // Phone-verification toggle. Sets verified true + stamps last_verified_at when
+  // confirming, or clears the verified flag if you need to flag a stale record.
+  async function toggleVerified(id: string, val: boolean) {
+    const next = !val
+    await supabase.from('hotels').update({
+      verified: next,
+      last_verified_at: next ? new Date().toISOString() : null,
+    }).eq('id', id)
+    loadAll()
+  }
+
   async function updateBadge(id: string, badge: string) {
     await supabase.from('hotels').update({ availability_badge: badge }).eq('id', id); loadAll()
   }
@@ -311,6 +322,17 @@ function AdminPageContent() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 600, color: 'var(--white)', fontSize: '13px' }}>{h.name}</span>
+                            {h.verified ? (
+                              <span style={{
+                                fontSize: '10px', background: 'rgba(34,197,94,0.15)', color: '#22c55e',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                              }}>✓ Verified</span>
+                            ) : (
+                              <span style={{
+                                fontSize: '10px', background: 'rgba(239,68,68,0.15)', color: '#ef4444',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                              }}>⚠ Unverified · hidden from drivers</span>
+                            )}
                             {h.featured && (
                               <span style={{
                                 fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)',
@@ -332,7 +354,14 @@ function AdminPageContent() {
                             <option value="limited">🟡 Limited</option>
                             <option value="full">🔴 Full</option>
                           </select>
-                          <div style={{ display: 'flex', gap: '4px' }}>
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => toggleVerified(h.id, h.verified || false)}
+                              style={{ ...btnGhost, color: h.verified ? '#ef4444' : '#22c55e', fontWeight: 600 }}
+                              title={h.verified ? 'Mark as needing re-verification' : 'Mark as phone-verified (will be visible to drivers)'}
+                            >
+                              {h.verified ? '✗ Unverify' : '✓ Verify'}
+                            </button>
                             <button onClick={() => toggleFeatured(h.id, h.featured)} style={btnGhost}>
                               {h.featured ? '★ Unfeat' : '☆ Feat'}
                             </button>
