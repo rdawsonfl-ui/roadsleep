@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import PasswordInput from '@/app/components/PasswordInput'
 
 type Hotelier = { id: string; email: string; name: string; business_phone: string }
 type Hotel = {
@@ -813,7 +814,11 @@ function Field({ label, value, onChange, placeholder, type='text' }: { label:str
   return (
     <div style={{ marginBottom:'14px' }}>
       <label className="dark-label">{label}</label>
-      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{ width:'100%', background:'var(--night3)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px', color:'var(--white)', fontSize:'14px', fontFamily:'DM Sans, sans-serif', boxSizing:'border-box' }} />
+      {type === 'password' ? (
+        <PasswordInput value={value} onChange={onChange} placeholder={placeholder} variant="inline" />
+      ) : (
+        <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} style={{ width:'100%', background:'var(--night3)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px', color:'var(--white)', fontSize:'14px', fontFamily:'DM Sans, sans-serif', boxSizing:'border-box' }} />
+      )}
     </div>
   )
 }

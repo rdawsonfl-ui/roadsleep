@@ -16,6 +16,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import PasswordInput from '@/app/components/PasswordInput'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
@@ -94,33 +95,15 @@ export default function ResetPasswordPage() {
               <label style={{ fontSize:'11px', color:'var(--fog)', display:'block', marginBottom:'4px' }}>
                 New Password
               </label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••"
-                style={{
-                  width:'100%', background:'var(--night3)', border:'1px solid var(--border)',
-                  borderRadius:'8px', padding:'10px 12px', color:'var(--white)',
-                  fontSize:'14px', fontFamily:'DM Sans, sans-serif', boxSizing:'border-box',
-                  marginBottom:'12px',
-                }}
-              />
+              <div style={{ marginBottom: '12px' }}>
+                <PasswordInput value={password} onChange={setPassword} placeholder="••••••••" variant="inline" />
+              </div>
               <label style={{ fontSize:'11px', color:'var(--fog)', display:'block', marginBottom:'4px' }}>
                 Confirm New Password
               </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirm(e.target.value)}
-                placeholder="••••••••"
-                style={{
-                  width:'100%', background:'var(--night3)', border:'1px solid var(--border)',
-                  borderRadius:'8px', padding:'10px 12px', color:'var(--white)',
-                  fontSize:'14px', fontFamily:'DM Sans, sans-serif', boxSizing:'border-box',
-                  marginBottom:'12px',
-                }}
-              />
+              <div style={{ marginBottom: '12px' }}>
+                <PasswordInput value={confirmPassword} onChange={setConfirm} placeholder="••••••••" variant="inline" />
+              </div>
               {err && (
                 <div style={{
                   background:'rgba(239,68,68,0.10)', border:'1px solid rgba(239,68,68,0.4)',

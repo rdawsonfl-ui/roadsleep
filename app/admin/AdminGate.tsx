@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import PasswordInput from '@/app/components/PasswordInput'
 
 const ADMIN_PASSWORD = 'roadsleep2026'  // Change this in production
 const STORAGE_KEY = 'rs_admin_ok'
@@ -59,13 +60,12 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
         </p>
         <form onSubmit={login}>
           <label className="dark-label">Password</label>
-          <input
-            type="password"
+          <PasswordInput
             value={pw}
-            onChange={e => setPw(e.target.value)}
-            className="dark-input"
+            onChange={setPw}
             placeholder="••••••••••"
             autoFocus
+            variant="dark-input"
           />
           {err && (
             <p style={{ color: 'var(--red)', fontSize: '12px', marginTop: '8px' }}>⚠ {err}</p>
