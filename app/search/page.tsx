@@ -12,13 +12,28 @@ const AMENITY_LABELS: Record<string, string> = {
 }
 const FILTERS = ['truck_parking', 'pets', '24hr_checkin']
 
-// Haversine distance in miles
+// Estimated road miles between two lat/lng points.
+//
+// We compute the great-circle (haversine) distance and then multiply by a
+// circuity factor of 1.25 — the standard rule-of-thumb in trucking/logistics
+// for converting straight-line ("crow flies") miles into approximate road
+// miles. Real driving distances on the US interstate system run roughly
+// 20–25% longer than great-circle, because roads bend around terrain,
+// avoid cities, and follow established routes.
+//
+// This is a temporary best-effort estimate. For launch we will swap this
+// out for a real routing API (Mapbox / Google Distance Matrix) which gives
+// turn-by-turn-accurate distances and drive times. Until then, the badge
+// is labeled "(approx)" so drivers are not misled into thinking it is
+// GPS-precise.
+const CIRCUITY_FACTOR = 1.25
 function milesBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3959 // earth radius in miles
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLng = (lng2 - lng1) * Math.PI / 180
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  const greatCircle = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return greatCircle * CIRCUITY_FACTOR
 }
 
 // Is the exit "ahead of" the user based on direction of travel?
@@ -222,7 +237,7 @@ function SearchResults() {
                         fontFamily: 'Syne, sans-serif', letterSpacing: '0.5px', marginBottom: '8px',
                       }}>
                         {hasGPS
-                          ? `📍 ${hotel._distance.toFixed(1)} MI AWAY`
+                          ? `📍 ~${Math.round(hotel._distance)} MI (approx)`
                           : `📍 MM ${Math.round(hotel._distance)}`}
                       </div>
 
