@@ -339,10 +339,7 @@ function AdminPageContent() {
                   {hotels.map(h => {
                     const exit = h.exits
                     return (
-                      <div key={h.id} style={{
-                        padding: '14px 20px', borderBottom: '1px solid var(--border)',
-                        display: 'flex', alignItems: 'flex-start', gap: '12px',
-                      }}>
+                      <div key={h.id} className="admin-hotel-row">
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 600, color: 'var(--white)', fontSize: '13px' }}>{h.name}</span>
@@ -382,8 +379,8 @@ function AdminPageContent() {
                           )}
                           <p style={{ fontSize: '11px', color: 'var(--mist)' }}>{h.phone}</p>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
-                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <div className="admin-hotel-actions">
+                          <div className="admin-hotel-actions-inner">
                             <button
                               onClick={() => toggleVerified(h.id, h.verified || false)}
                               style={{

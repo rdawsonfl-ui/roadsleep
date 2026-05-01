@@ -100,3 +100,45 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
 @media (prefers-reduced-motion: reduce) {
   .boost-pulse { animation: none; }
 }
+
+/* Admin hotel-card row — desktop stays side-by-side (info | actions),
+   mobile stacks vertically so action buttons don't overlap the hotel name.
+   Breakpoint at 640px matches typical phone widths. */
+.admin-hotel-row {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.admin-hotel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+.admin-hotel-actions-inner {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .admin-hotel-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .admin-hotel-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+  .admin-hotel-actions-inner {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .admin-hotel-actions-inner button {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
