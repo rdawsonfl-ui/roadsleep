@@ -385,16 +385,21 @@ function AdminPageContent() {
                               onClick={() => toggleVerified(h.id, h.verified || false)}
                               style={{
                                 ...btnGhost,
-                                background: h.verified ? 'rgba(239,68,68,0.10)' : 'rgba(34,197,94,0.15)',
-                                color: h.verified ? '#ef4444' : '#22c55e',
+                                // Color logic: when verified, show muted red ("hide" warning).
+                                // When NOT verified, show muted amber ("action needed" prompt).
+                                // We deliberately avoid bright green on the unverified state
+                                // because at a glance it reads as "this hotel IS verified",
+                                // which is the opposite of the truth.
+                                background: h.verified ? 'rgba(239,68,68,0.10)' : 'rgba(245,166,35,0.12)',
+                                color: h.verified ? '#ef4444' : 'var(--amber)',
                                 fontWeight: 700,
-                                border: `1px solid ${h.verified ? '#ef4444' : '#22c55e'}`,
+                                border: `1px solid ${h.verified ? '#ef4444' : 'var(--amber)'}`,
                               }}
                               title={h.verified
                                 ? 'Currently visible to drivers. Click to hide (e.g., re-verify needed).'
                                 : 'Click after you have called this hotel and confirmed the phone works. Will become visible to drivers.'}
                             >
-                              {h.verified ? '⏸ Hide from Drivers' : '✓ Phone OK · Show to Drivers'}
+                              {h.verified ? '⏸ Hide from Drivers' : '📞 Verify Phone'}
                             </button>
                             <button onClick={() => toggleFeatured(h.id, h.featured)} style={btnGhost}>
                               {h.featured ? '★ Unboost' : '☆ Boost'}
