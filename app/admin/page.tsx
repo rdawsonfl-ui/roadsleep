@@ -152,6 +152,21 @@ function AdminPageContent() {
     loadAll()
   }
 
+  // Set the admin-only triage priority captured during the phone verification
+  // call. Click the same priority again to clear it (toggle off).
+  async function setPriority(id: string, current: string | null, next: 'high'|'medium'|'low') {
+    const newVal = current === next ? null : next
+    await supabase.from('hotels').update({ priority: newVal }).eq('id', id)
+    loadAll()
+  }
+
+  // Save free-form admin notes from the verification call. Debounced via
+  // local state in the row component; this just persists whatever was typed.
+  async function saveNotes(id: string, notes: string) {
+    await supabase.from('hotels').update({ admin_notes: notes }).eq('id', id)
+    // Don't loadAll() — would steal focus from the textarea while typing.
+  }
+
   const toggleAmenity = (key: string) => {
     setForm(f => ({ ...f, amenities: f.amenities.includes(key) ? f.amenities.filter(a => a !== key) : [...f.amenities, key] }))
   }
@@ -407,6 +422,22 @@ function AdminPageContent() {
                             <button onClick={() => editHotel(h)} style={{ ...btnGhost, color: 'var(--blue)' }}>Edit</button>
                             <button onClick={() => deleteHotel(h.id)} style={{ ...btnGhost, color: 'var(--red)' }}>Del</button>
                           </div>
+
+                          {/* Triage priority — set during the verification call.
+                              Surfaces high-priority hotels first to drivers when
+                              multiple options sit at similar distance. Clicking
+                              the same level again clears the priority. */}
+                          <PriorityRow
+                            value={h.priority}
+                            onSet={(level) => setPriority(h.id, h.priority, level)}
+                          />
+
+                          {/* Admin-only notes from the call. Saves on blur so we
+                              don't hammer the DB on every keystroke. */}
+                          <NotesField
+                            initial={h.admin_notes || ''}
+                            onSave={(v) => saveNotes(h.id, v)}
+                          />
                         </div>
                       </div>
                     )
@@ -605,3 +636,94 @@ export default function AdminPage() {
 }
 
 export const dynamic = 'force-dynamic'
+
+// ─────────────────────────────────────────────────────────────────────────
+// Per-row subcomponents for priority + notes
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * PriorityRow — three pill buttons (HIGH / MED / LOW) showing the current
+ * triage state. The active level is highlighted; clicking it again clears.
+ * Used during phone verification to surface good hotels first to drivers.
+ */
+function PriorityRow({ value, onSet }: {
+  value: string | null
+  onSet: (level: 'high'|'medium'|'low') => void
+}) {
+  const levels: Array<{ key: 'high'|'medium'|'low'; label: string; color: string }> = [
+    { key: 'high',   label: 'HIGH', color: '#22c55e' },  // green = good
+    { key: 'medium', label: 'MED',  color: '#f5a623' },  // amber = ok
+    { key: 'low',    label: 'LOW',  color: '#ef4444' },  // red = poor
+  ]
+  return (
+    <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '10px', color: 'var(--fog)', alignSelf: 'center', marginRight: '2px' }}>
+        Priority:
+      </span>
+      {levels.map(l => {
+        const active = value === l.key
+        return (
+          <button
+            key={l.key}
+            onClick={() => onSet(l.key)}
+            title={active ? `Clear ${l.label} priority` : `Mark as ${l.label} priority`}
+            style={{
+              padding: '4px 10px',
+              borderRadius: '12px',
+              fontSize: '10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: `1px solid ${l.color}`,
+              background: active ? l.color : 'transparent',
+              color: active ? 'var(--night)' : l.color,
+            }}
+          >
+            {l.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * NotesField — small textarea that tracks local edits and only writes to the
+ * database on blur. Avoids hammering Supabase on every keystroke and avoids
+ * focus-stealing re-renders that would happen if the parent reloaded the
+ * whole hotel list on each save.
+ */
+function NotesField({ initial, onSave }: {
+  initial: string
+  onSave: (v: string) => void
+}) {
+  const [val, setVal] = useState(initial)
+  const [saved, setSaved] = useState(true)
+  return (
+    <div style={{ marginTop: '6px', position: 'relative' }}>
+      <textarea
+        value={val}
+        onChange={e => { setVal(e.target.value); setSaved(false) }}
+        onBlur={() => { if (!saved) { onSave(val); setSaved(true) } }}
+        placeholder="📝 Notes from call (e.g. 'rude', 'no truck parking', 'call back Tue')"
+        rows={2}
+        style={{
+          width: '100%',
+          background: 'var(--night3)',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          padding: '6px 8px',
+          color: 'var(--white)',
+          fontSize: '12px',
+          fontFamily: 'DM Sans, sans-serif',
+          resize: 'vertical',
+          boxSizing: 'border-box',
+        }}
+      />
+      {!saved && (
+        <span style={{ position: 'absolute', right: '8px', top: '4px', fontSize: '10px', color: 'var(--amber)' }}>
+          unsaved · click out to save
+        </span>
+      )}
+    </div>
+  )
+}

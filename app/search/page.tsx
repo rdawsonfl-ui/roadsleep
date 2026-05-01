@@ -116,7 +116,17 @@ function SearchResults() {
         const exit = aheadExits.find(e => e.id === h.exit_id)
         return { ...h, _distance: exit ? exit._distance : 99 }
       }).sort((a, b) => {
+        // Sort priority cascade:
+        //   1. Boosted hotels first (paid placement)
+        //   2. Admin-set priority (high → medium → low → unset)
+        //      Used when multiple hotels sit at similar distance — driver
+        //      sees the ones we know are friendly + trucker-friendly first.
+        //   3. Distance (closer first)
         if (a.featured !== b.featured) return b.featured ? 1 : -1
+        const pRank = (p: string | null | undefined) =>
+          p === 'high' ? 0 : p === 'medium' ? 1 : p === 'low' ? 3 : 2
+        const ap = pRank(a.priority), bp = pRank(b.priority)
+        if (ap !== bp) return ap - bp
         return a._distance - b._distance
       })
       setHotels(enriched)
