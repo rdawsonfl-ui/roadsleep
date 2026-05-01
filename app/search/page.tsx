@@ -40,6 +40,11 @@ function SearchResults() {
   const distance = parseFloat(params.get('distance') || '30')
   const userLat = parseFloat(params.get('lat') || '0')
   const userLng = parseFloat(params.get('lng') || '0')
+  // True only when we have a real GPS fix from the homepage. We use this to
+  // decide whether _distance values represent real miles or just mile-markers
+  // — so the UI can label them correctly instead of saying "141 MI AHEAD"
+  // when 141 is actually the highway mile marker, not the driver's distance.
+  const hasGPS = userLat !== 0 && userLng !== 0
 
   const [hotels, setHotels] = useState<any[]>([])
   const [interstate, setInterstate] = useState<Interstate | null>(null)
@@ -65,8 +70,6 @@ function SearchResults() {
         .eq('direction', direction)
 
       if (!exits || exits.length === 0) { setHotels([]); setLoading(false); return }
-
-      const hasGPS = userLat !== 0 && userLng !== 0
 
       // GPS available: filter ahead within distance. No GPS: show all sorted by mile marker
       const aheadExits = hasGPS
@@ -185,7 +188,7 @@ function SearchResults() {
               onPinClick={(id) => router.push(`/hotel/${id}`)}
             />
             <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
-              {filtered.length} hotel{filtered.length !== 1 ? 's' : ''} ahead · sorted by distance
+              {filtered.length} hotel{filtered.length !== 1 ? 's' : ''} ahead · {hasGPS ? 'sorted by distance' : 'sorted by mile marker · enable location for distance'}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {filtered.map(hotel => {
@@ -209,13 +212,18 @@ function SearchResults() {
                       <img src={hotel.photo_url} alt={hotel.name} style={{ width: '100%', height: '140px', objectFit: 'cover' }}/>
                     )}
                     <div style={{ padding: '16px' }}>
-                      {/* Distance badge */}
+                      {/* Distance badge — honest about what the number means.
+                          With GPS: shows real "X.X MI AWAY" computed via haversine.
+                          Without GPS: shows "MM 141" (mile marker) so drivers don't
+                          misread the highway position number as a driving distance. */}
                       <div style={{
                         display: 'inline-block', background: 'rgba(74,158,222,0.15)', color: 'var(--blue)',
                         padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
                         fontFamily: 'Syne, sans-serif', letterSpacing: '0.5px', marginBottom: '8px',
                       }}>
-                        📍 {hotel._distance.toFixed(1)} MI AHEAD
+                        {hasGPS
+                          ? `📍 ${hotel._distance.toFixed(1)} MI AWAY`
+                          : `📍 MM ${Math.round(hotel._distance)}`}
                       </div>
 
                       <div style={{ marginBottom: '8px' }}>
