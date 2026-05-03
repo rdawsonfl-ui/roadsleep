@@ -123,7 +123,10 @@ export default function HomePage() {
     const hLng = h.longitude ?? h.exits?.lng
     let dist: number | null = null
     if (userLoc && hLat && hLng) {
-      dist = milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng))
+      // Apply the 1.25 circuity factor here too, so homepage distances
+      // match the /search page and roughly approximate driving miles
+      // instead of straight-line ('as the crow flies') miles.
+      dist = milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng)) * 1.25
     }
     return { ...h, distance: dist }
   })
@@ -148,22 +151,25 @@ export default function HomePage() {
     }
   }
 
-  if (userLoc && distance === 'closest') {
-    filtered.sort((a, b) => {
-      if (a.distance === null) return 1
-      if (b.distance === null) return -1
-      return (a.distance as number) - (b.distance as number)
-    })
-  } else {
-    filtered.sort((a, b) => {
-      if (a.featured && !b.featured) return -1
-      if (!a.featured && b.featured) return 1
-      if (a.distance !== null && b.distance !== null) {
-        return (a.distance as number) - (b.distance as number)
-      }
-      return 0
-    })
-  }
+  // Sort cascade. ALWAYS the same order regardless of distance preset:
+  //   1. Boosted listings first (paid placement — preserved across all states)
+  //   2. Distance — ascending. With GPS this is real miles. Without GPS we
+  //      fall back to mile marker so the list isn't a random mess.
+  //   3. Listings with no distance data sink to the end.
+  // Old code special-cased 'closest' and stripped the boost-first behavior;
+  // that contradicted the rest of the app's Boost->Priority->Distance cascade.
+  // Now Closest is just the default sort, applied always.
+  filtered.sort((a, b) => {
+    if (a.featured !== b.featured) return a.featured ? -1 : 1
+
+    // Use real distance when available, else mile marker as a deterministic
+    // fallback so 'closest' is still meaningful when GPS is denied.
+    const aDist = a.distance ?? a.exits?.mile_marker ?? Number.POSITIVE_INFINITY
+    const bDist = b.distance ?? b.exits?.mile_marker ?? Number.POSITIVE_INFINITY
+
+    if (aDist === bDist) return 0
+    return Number(aDist) - Number(bDist)
+  })
 
   return (
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '20px 16px 48px' }}>
@@ -224,10 +230,16 @@ export default function HomePage() {
             toggle and the More Filters dropdown. Filled when active (default
             state), outlined when user has narrowed to a specific distance.
             Tapping it always resets distance to 'closest'. Width is roughly
-            half the category buttons, lined up under them. */}
+            half the category buttons, lined up under them.
+            When GPS is denied we still show this button (since 'closest' is
+            still the default sort) but we hint that the sort is by mile
+            marker rather than real distance — honest with the driver. */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
           <button
             onClick={() => setDistance('closest')}
+            title={userLoc
+              ? 'Sort by closest first (real distance from your location)'
+              : 'Sort by mile marker (GPS not available)'}
             style={{
               width: '48%',
               background: distance === 'closest' ? 'var(--amber)' : 'transparent',
