@@ -35,6 +35,9 @@ function AdminPageContent() {
   const [csvText, setCsvText] = useState('')
   const [newInterstate, setNewInterstate] = useState('')
   const [exitForm, setExitForm] = useState({ interstate_id: '', direction: 'N', exit_label: '', mile_marker: '', city: '', state: '', lat: '', lng: '' })
+  // Category filter for the admin Listings tab. Mirrors the driver-side toggle
+  // so admins can quickly see just hotels or just RV parks while verifying.
+  const [adminCategory, setAdminCategory] = useState<'all' | 'hotel' | 'rv_park'>('all')
 
   useEffect(() => { loadAll() }, [])
 
@@ -205,7 +208,7 @@ function AdminPageContent() {
               padding: '10px 4px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', marginBottom: '-1px',
             }}>
-              {t === 'hotels' ? '🏨 Hotels' : t === 'interstates' ? '🛣️ Interstates & Exits' : '👤 Hoteliers'}
+              {t === 'hotels' ? '🏨 Listings' : t === 'interstates' ? '🛣️ Interstates & Exits' : '👤 Hoteliers'}
             </button>
           ))}
         </div>
@@ -321,23 +324,61 @@ function AdminPageContent() {
             {/* Hotels List */}
             <div style={cardStyle}>
               <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-                <h3 style={{ fontSize: '14px', fontFamily: 'Syne, sans-serif', color: 'var(--white)' }}>
-                  All Hotels ({hotels.length})
+                <h3 style={{ fontSize: '14px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '10px' }}>
+                  All Listings ({hotels.length})
                 </h3>
+                {/* Category filter — same 3 pills the driver page uses, so admin
+                    can flip to RV Parks during a phone-verification batch and not
+                    have to scroll through 188 hotels to find them. */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                  {([
+                    { key: 'all',     label: `All (${hotels.length})` },
+                    { key: 'hotel',   label: `🏨 Hotels (${hotels.filter(h => (h.type || 'hotel') === 'hotel').length})` },
+                    { key: 'rv_park', label: `🚐 RV Parks (${hotels.filter(h => h.type === 'rv_park').length})` },
+                  ] as const).map(opt => {
+                    const active = adminCategory === opt.key
+                    return (
+                      <button
+                        key={opt.key}
+                        onClick={() => setAdminCategory(opt.key)}
+                        style={{
+                          flex: 1,
+                          background: active ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
+                          color: active ? 'var(--amber)' : 'var(--fog)',
+                          border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
+                          borderRadius: '8px',
+                          padding: '7px 10px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          fontFamily: 'Syne, sans-serif',
+                          letterSpacing: '0.3px',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
                 {/* Phone verification progress — lets admin see at a glance how much work remains */}
-                {hotels.length > 0 && (
-                  <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--fog)' }}>
-                    <span style={{ color: '#22c55e', fontWeight: 600 }}>
-                      ✓ {hotels.filter(h => h.verified).length} verified
-                    </span>
-                    {' · '}
-                    <span style={{ color: '#ef4444', fontWeight: 600 }}>
-                      ⚠ {hotels.filter(h => !h.verified).length} need phone verification
-                    </span>
-                    {' · '}
-                    <span>only verified hotels appear in driver search</span>
-                  </div>
-                )}
+                {hotels.length > 0 && (() => {
+                  const visible = adminCategory === 'all'
+                    ? hotels
+                    : hotels.filter(h => (h.type || 'hotel') === adminCategory)
+                  return (
+                    <div style={{ fontSize: '11px', color: 'var(--fog)' }}>
+                      <span style={{ color: '#22c55e', fontWeight: 600 }}>
+                        ✓ {visible.filter(h => h.verified).length} verified
+                      </span>
+                      {' · '}
+                      <span style={{ color: '#ef4444', fontWeight: 600 }}>
+                        ⚠ {visible.filter(h => !h.verified).length} need phone verification
+                      </span>
+                      {' · '}
+                      <span>only verified {adminCategory === 'rv_park' ? 'RV parks' : adminCategory === 'hotel' ? 'hotels' : 'listings'} appear in driver search</span>
+                    </div>
+                  )
+                })()}
                 {/* Boost / billing counters — admin sees who's currently boosted (live)
                     and who used a boost today (for end-of-day billing). */}
                 {hotels.length > 0 && (() => {
@@ -363,10 +404,12 @@ function AdminPageContent() {
                 })()}
               </div>
               {hotels.length === 0 ? (
-                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>No hotels yet</div>
+                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>No listings yet</div>
               ) : (
                 <div>
-                  {hotels.map(h => {
+                  {hotels
+                    .filter(h => adminCategory === 'all' || (h.type || 'hotel') === adminCategory)
+                    .map(h => {
                     const exit = h.exits
                     return (
                       <div key={h.id} className="admin-hotel-row">
