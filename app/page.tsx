@@ -289,18 +289,20 @@ export default function HomePage() {
             onClick={() => setShowFilters(s => !s)}
             style={{
               width: '100%',
-              background: 'transparent',
-              color: 'var(--fog)',
-              border: '1px solid var(--border)',
+              background: showFilters ? '#dc2626' : 'transparent',
+              color:      showFilters ? '#ffffff' : '#dc2626',
+              border: '2px solid #dc2626',
               borderRadius: '10px',
-              padding: '10px 14px',
-              fontSize: '13px',
-              fontWeight: 600,
+              padding: '11px 14px',
+              fontSize: '14px',
+              fontWeight: 800,
               cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              letterSpacing: '0.3px',
+              transition: 'all 0.15s',
             }}
           >
             <span>
@@ -309,7 +311,9 @@ export default function HomePage() {
                   so they remember they're filtered. */}
               {distance !== 'closest' && (
                 <span style={{
-                  marginLeft: '8px', background: 'var(--amber)', color: 'var(--night)',
+                  marginLeft: '8px',
+                  background: showFilters ? '#ffffff' : '#dc2626',
+                  color:      showFilters ? '#dc2626' : '#ffffff',
                   padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
                 }}>
                   on
