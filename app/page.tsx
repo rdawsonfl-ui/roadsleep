@@ -242,16 +242,17 @@ export default function HomePage() {
               : 'Sort by mile marker (GPS not available)'}
             style={{
               width: '48%',
-              background: distance === 'closest' ? 'var(--amber)' : 'transparent',
-              color:      distance === 'closest' ? 'var(--night)' : 'var(--amber)',
-              border: '2px solid var(--amber)',
+              background: distance === 'closest' ? '#22c55e' : 'transparent',
+              color:      distance === 'closest' ? '#ffffff' : '#22c55e',
+              border: '2px solid #22c55e',
               borderRadius: '10px',
               padding: '10px 12px',
-              fontSize: '13px',
-              fontWeight: 700,
+              fontSize: '14px',
+              fontWeight: 900,
               cursor: 'pointer',
               fontFamily: 'Syne, sans-serif',
-              letterSpacing: '0.4px',
+              letterSpacing: '0.5px',
+              textTransform: 'uppercase',
               minHeight: '40px',
               transition: 'all 0.15s',
             }}
