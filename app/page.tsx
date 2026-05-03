@@ -21,6 +21,12 @@ type Hotel = {
   // Category — drives the All / Hotels / RV Parks toggle. Defaults to 'hotel'
   // server-side so legacy/null rows always render under the Hotels view.
   type?: 'hotel' | 'rv_park' | null
+  // RV-park-specific: how far you have to drive off the interstate to reach
+  // the park. Hotels typically sit AT exits and have this null. RV parks
+  // are usually 5–20 mi off the highway and we want to be honest about it
+  // so drivers can decide if the detour is worth it.
+  distance_off_route_mi?: number | null
+  near_interstate?: { name: string | null } | null
   exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; interstates?: { name: string | null } | null } | null
   distance: number | null
 }
@@ -91,7 +97,7 @@ export default function HomePage() {
       try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,type,exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
         .eq('verified', true)
         .limit(200)
       if (data) {
@@ -230,7 +236,17 @@ export default function HomePage() {
         {filtered.map((h) => {
           const price = h.price_min ? `$${h.price_min}${h.price_max ? `-$${h.price_max}` : ''}` : 'Call'
           const distLabel = h.distance !== null ? `${Math.round(h.distance as number)} mi away` : null
-          const exitLabel = h.exits ? `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}` : null
+          // Display label for location.
+          // - Hotels (or RV parks attached to an exit): "I-95 · MM 318 · City, ST"
+          // - RV parks with distance-off-route data: "I-95 · 4 mi off route"
+          //   so drivers can decide if the detour is worth it.
+          const exitLabel = (() => {
+            if (h.type === 'rv_park' && h.near_interstate?.name && h.distance_off_route_mi != null) {
+              const mi = Number(h.distance_off_route_mi)
+              return `${h.near_interstate.name} · ${mi < 1 ? '<1' : Math.round(mi)} mi off route`
+            }
+            return h.exits ? `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}` : null
+          })()
           return (
             <div key={h.id} style={{ background: 'var(--night2)', border: h.featured ? '1px solid rgba(245,166,35,0.4)' : '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>

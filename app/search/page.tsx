@@ -320,11 +320,20 @@ function SearchResults() {
                         <h3 style={{ fontSize: '16px', color: 'var(--white)', fontFamily: 'Syne, sans-serif', marginBottom: '4px' }}>
                           {hotel.name}
                         </h3>
-                        {exit && (
+                        {/* Location line: for RV parks we show "X mi off route" since
+                            they typically aren't pinned to a specific exit. For hotels
+                            we keep the existing exit-label display. */}
+                        {hotel.type === 'rv_park' && hotel.distance_off_route_mi != null ? (
+                          <p style={{ fontSize: '11px', color: 'var(--fog)' }}>
+                            {Number(hotel.distance_off_route_mi) < 1
+                              ? '<1 mi off route'
+                              : `${Math.round(Number(hotel.distance_off_route_mi))} mi off route`}
+                          </p>
+                        ) : exit ? (
                           <p style={{ fontSize: '11px', color: 'var(--fog)' }}>
                             {exit.exit_label} · {exit.city}, {exit.state}
                           </p>
-                        )}
+                        ) : null}
                       </div>
 
                       {/* When not boosted, show price inline as before (compact, no banner). */}
