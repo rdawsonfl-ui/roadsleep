@@ -73,12 +73,11 @@ export default function HomePage() {
   // self-update via their dashboard, or after a periodic refresh job).
   // Distance preset: 'closest' shows everything sorted by closest first.
   // Numeric values cap to that many miles. Default = 'closest' so drivers
-  // see results immediately without picking a distance — tap More Filters
-  // to narrow if they want.
+  // Distance preset. We removed the More Filters panel that let drivers
+  // narrow this — Closest is the only setting now. Kept as state (not a
+  // const) because the Closest button toggles it, and it's a low-risk
+  // anchor if we want to bring filters back later.
   const [distance, setDistance] = useState<'10' | '30' | '60' | '120' | 'closest'>('closest')
-  // Whether the More Filters panel is expanded. Collapsed by default —
-  // most drivers just want the closest option and shouldn't see clutter.
-  const [showFilters, setShowFilters] = useState(false)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
@@ -281,90 +280,10 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* More Filters — collapsed by default. Default behavior is 'closest'
-            (sort by distance, no cap), which is what most drivers want. Tap
-            this to reveal distance caps and price filter for refinement. */}
-        <div style={{ marginBottom: '16px' }}>
-          <button
-            onClick={() => setShowFilters(s => !s)}
-            style={{
-              width: '100%',
-              background: showFilters ? '#dc2626' : 'transparent',
-              color:      showFilters ? '#ffffff' : '#dc2626',
-              border: '2px solid #dc2626',
-              borderRadius: '10px',
-              padding: '11px 14px',
-              fontSize: '14px',
-              fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'DM Sans, sans-serif',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              letterSpacing: '0.3px',
-              transition: 'all 0.15s',
-            }}
-          >
-            <span>
-              ⚙️ More Filters
-              {/* If the user has narrowed away from defaults, show a small badge
-                  so they remember they're filtered. */}
-              {distance !== 'closest' && (
-                <span style={{
-                  marginLeft: '8px',
-                  background: showFilters ? '#ffffff' : '#dc2626',
-                  color:      showFilters ? '#dc2626' : '#ffffff',
-                  padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
-                }}>
-                  on
-                </span>
-              )}
-            </span>
-            <span style={{ fontSize: '11px' }}>{showFilters ? '▲' : '▼'}</span>
-          </button>
-
-          {showFilters && (
-            <div style={{
-              marginTop: '10px', padding: '14px',
-              background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '10px',
-            }}>
-              {/* Distance options */}
-              <label style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', display: 'block', marginBottom: '8px' }}>
-                Distance
-              </label>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
-                {(['closest','10','30','60','120'] as const).map((d) => (
-                  <button key={d} onClick={() => setDistance(d)} style={{
-                    background: distance === d ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
-                    color: distance === d ? 'var(--amber)' : 'var(--fog)',
-                    border: distance === d ? '1px solid var(--amber)' : '1px solid var(--border)',
-                    padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                  }}>{d === 'closest' ? 'Any (closest first)' : `${d} mi`}</button>
-                ))}
-              </div>
-
-              {/* Reset row — quick way back to defaults if a driver got narrowed
-                  into a corner with zero results. */}
-              {distance !== 'closest' && (
-                <button
-                  onClick={() => setDistance('closest')}
-                  style={{
-                    marginTop: '4px',
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--red)',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                    fontFamily: 'DM Sans, sans-serif',
-                  }}
-                >
-                  Reset filters
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        {/* (More Filters dropdown was removed — page now defaults to Closest
+            with no narrowing options. The Closest button above is the only
+            distance control. We can bring filters back later if needed by
+            restoring the panel + setShowFilters state.) */}
 
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '14px' }}>
           {loading
