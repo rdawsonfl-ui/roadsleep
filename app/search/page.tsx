@@ -65,12 +65,9 @@ function SearchResults() {
   const [interstate, setInterstate] = useState<Interstate | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeFilters, setActiveFilters] = useState<string[]>([])
-  // Category toggle: 'all' shows hotels + RV parks together; 'hotel' or
-  // 'rv_park' restricts. Default is 'all' so drivers see everything unless
-  // they explicitly narrow. Filtering happens client-side after fetch — the
-  // dataset for one interstate is small enough that a re-query per toggle
-  // tap would be wasteful.
-  const [category, setCategory] = useState<'all' | 'hotel' | 'rv_park'>('all')
+  // Two-state category toggle (no 'All') — matches homepage behavior.
+  // Default = Hotels because that's where most supply is.
+  const [category, setCategory] = useState<'hotel' | 'rv_park'>('hotel')
 
   useEffect(() => {
     if (!interstateId) return
@@ -142,14 +139,11 @@ function SearchResults() {
   }, [interstateId, direction, distance, userLat, userLng])
 
   const filtered = hotels.filter(h => {
-    // Category gate first — 'all' lets everything through; otherwise we keep
-    // only rows whose `type` matches. Existing rows without a type set are
-    // treated as 'hotel' (defensive — DB default is 'hotel' so this only
-    // matters for legacy data inserted before the migration).
-    if (category !== 'all') {
-      const t = h.type || 'hotel'
-      if (t !== category) return false
-    }
+    // Category gate first — keep only rows whose `type` matches. Existing
+    // rows without a type set are treated as 'hotel' (defensive — DB default
+    // is 'hotel' so this only matters for legacy data inserted pre-migration).
+    const t = h.type || 'hotel'
+    if (t !== category) return false
     // Then the existing amenity filter.
     return activeFilters.length === 0 || activeFilters.every(f => h.amenities?.includes(f))
   })
@@ -182,15 +176,13 @@ function SearchResults() {
           </div>
         </div>
 
-        {/* Category toggle — All / Hotels / RV Parks. Sits above the amenity
-            filters so drivers narrow by lodging type FIRST, then refine by
-            features (truck parking, etc.). The active button uses the same
-            amber accent the rest of the app uses for selection. */}
-        <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+        {/* Category toggle — Hotels / RV Parks. Two big thumb-size buttons,
+            no 'All' option. Active = filled amber, inactive = outlined.
+            Matches the homepage toggle so behavior is consistent. */}
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
           {([
-            { key: 'all',     label: 'All' },
-            { key: 'hotel',   label: 'Hotels' },
-            { key: 'rv_park', label: 'RV Parks' },
+            { key: 'hotel',   label: '🏨 Hotels' },
+            { key: 'rv_park', label: '🚐 RV Parks' },
           ] as const).map(opt => {
             const active = category === opt.key
             return (
@@ -199,17 +191,18 @@ function SearchResults() {
                 onClick={() => setCategory(opt.key)}
                 style={{
                   flex: 1,
-                  background: active ? 'rgba(245,166,35,0.15)' : 'var(--night2)',
-                  color: active ? 'var(--amber)' : 'var(--fog)',
-                  border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
-                  borderRadius: '10px',
-                  padding: '10px 12px',
-                  fontSize: '13px',
-                  fontWeight: 600,
+                  background: active ? 'var(--amber)' : 'transparent',
+                  color: active ? 'var(--night)' : 'var(--amber)',
+                  border: '2px solid var(--amber)',
+                  borderRadius: '12px',
+                  padding: '14px 12px',
+                  fontSize: '15px',
+                  fontWeight: 800,
                   cursor: 'pointer',
                   fontFamily: 'Syne, sans-serif',
                   letterSpacing: '0.3px',
                   transition: 'all 0.15s',
+                  minHeight: '50px',
                 }}
               >
                 {opt.label}
@@ -266,7 +259,7 @@ function SearchResults() {
               onPinClick={(id) => router.push(`/hotel/${id}`)}
             />
             <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
-              {filtered.length} {category === 'rv_park' ? 'RV park' : category === 'hotel' ? 'hotel' : 'place'}{filtered.length !== 1 ? 's' : ''} ahead · {hasGPS ? 'sorted by distance' : 'sorted by mile marker · enable location for distance'}
+              {filtered.length} {category === 'rv_park' ? 'RV park' : 'hotel'}{filtered.length !== 1 ? 's' : ''} ahead · {hasGPS ? 'sorted by distance' : 'sorted by mile marker · enable location for distance'}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {filtered.map(hotel => {
