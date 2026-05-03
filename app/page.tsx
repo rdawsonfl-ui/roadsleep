@@ -338,7 +338,20 @@ export default function HomePage() {
                 )}
               </div>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white)', marginBottom: '4px' }}>{h.name}</h3>
-              {exitLabel && <p style={{ fontSize: '11px', color: 'var(--fog)', marginBottom: '4px' }}>{exitLabel}</p>}
+              {/* RV parks: render the 'X mi off route' line prominently (15px,
+                  bold green) since detour distance is the deciding factor for
+                  RV drivers — they need to see it without staring at the card.
+                  Hotels are AT exits so they don't have this concept; for them
+                  we keep the small gray exit-label line below. */}
+              {h.type === 'rv_park' && h.near_interstate?.name && h.distance_off_route_mi != null ? (
+                <p style={{ fontSize: '15px', color: '#22c55e', fontWeight: 800, marginBottom: '4px', letterSpacing: '0.2px' }}>
+                  {h.near_interstate.name} · {Number(h.distance_off_route_mi) < 1
+                    ? '<1 mi off route'
+                    : `${Math.round(Number(h.distance_off_route_mi))} mi off route`}
+                </p>
+              ) : (
+                exitLabel && <p style={{ fontSize: '11px', color: 'var(--fog)', marginBottom: '4px' }}>{exitLabel}</p>
+              )}
               <p style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '10px' }}>{h.address || ''}</p>
               {h.amenities && h.amenities.length > 0 && (
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
