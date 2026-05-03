@@ -4,10 +4,13 @@ import { usePathname } from 'next/navigation'
 
 export default function Nav() {
   const path = usePathname()
+  // Only public-facing tabs in the top nav. The Admin route still exists at
+  // /admin (and still requires the password gate to enter), but we don't link
+  // to it from the nav so casual visitors and drivers don't see it. The site
+  // owner gets there by typing the URL directly.
   const tabs = [
-    { href: '/', label: 'Find Hotels' },
-    { href: '/hotelier', label: 'Hoteliers' },
-    { href: '/admin', label: 'Admin' },
+    { href: '/',         label: 'Find a Stop' },
+    { href: '/hotelier', label: 'Hotel/Park Owner' },
   ]
   return (
     <nav style={{

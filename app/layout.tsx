@@ -3,8 +3,8 @@ import "./globals.css";
 import Nav from "./Nav";
 
 export const metadata: Metadata = {
-  title: "RoadSleep – Find Hotels by Mile Marker",
-  description: "Find affordable, realistic places to sleep by mile marker — fast.",
+  title: "RoadSleep – Find a Stop by Mile Marker",
+  description: "Hotels and RV parks along major interstates — find your next stop fast.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
