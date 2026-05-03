@@ -18,6 +18,9 @@ type Hotel = {
   // featured doubles as 'currently boosted'; boost_price is the discount.
   boost_price: number | null
   boost_ends_at: string | null
+  // Category — drives the All / Hotels / RV Parks toggle. Defaults to 'hotel'
+  // server-side so legacy/null rows always render under the Hotels view.
+  type?: 'hotel' | 'rv_park' | null
   exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; interstates?: { name: string | null } | null } | null
   distance: number | null
 }
@@ -61,6 +64,9 @@ export default function HomePage() {
   const [distance, setDistance] = useState<'10' | '30' | '60' | 'closest'>('30')
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
+  // Category toggle — All shows everything; Hotels/RV Parks restrict by type.
+  // Default is 'all' so we don't hide anything by accident on first load.
+  const [category, setCategory] = useState<'all' | 'hotel' | 'rv_park'>('all')
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -85,7 +91,7 @@ export default function HomePage() {
       try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,type,exits(lat,lng,city,state,mile_marker,interstates(name))')
         .eq('verified', true)
         .limit(200)
       if (data) {
@@ -107,6 +113,13 @@ export default function HomePage() {
   })
 
   let filtered = hotelsWithDistance.filter((h) => !h.price_min || h.price_min <= maxPrice)
+
+  // Category gate — 'all' lets everything pass; otherwise restrict by type.
+  // Treat null/undefined type as 'hotel' (DB default) so legacy rows aren't
+  // accidentally hidden when the driver picks Hotels.
+  if (category !== 'all') {
+    filtered = filtered.filter((h) => (h.type || 'hotel') === category)
+  }
 
   if (userLoc) {
     if (distance === '10') {
@@ -139,15 +152,51 @@ export default function HomePage() {
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '20px 16px 48px' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '26px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '4px' }}>
-          Hotels at your <span style={{ color: 'var(--amber)' }}>next exit</span>
+          {category === 'rv_park' ? 'RV Parks' : category === 'hotel' ? 'Hotels' : 'Hotels & RV parks'} at your <span style={{ color: 'var(--amber)' }}>next exit</span>
         </h1>
-        <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '20px' }}>Hotels along major interstates</p>
+        <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '20px' }}>
+          {category === 'rv_park' ? 'RV parks along major interstates' : category === 'hotel' ? 'Hotels along major interstates' : 'Hotels and RV parks along major interstates'}
+        </p>
 
         {locStatus === 'denied' && (
           <div style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: 'var(--mist)' }}>
             📍 Location blocked. Distance filtering disabled. <button onClick={() => window.location.reload()} style={{ background: 'none', border: 'none', color: 'var(--amber)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>Enable GPS</button> to see nearest hotels.
           </div>
         )}
+
+        {/* Category toggle — All / Hotels / RV Parks. Three equal-width
+            pill buttons. Active state uses the same amber accent the rest
+            of the page already uses for selection so it feels native. */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+          {([
+            { key: 'all',     label: 'All' },
+            { key: 'hotel',   label: '🏨 Hotels' },
+            { key: 'rv_park', label: '🚐 RV Parks' },
+          ] as const).map(opt => {
+            const active = category === opt.key
+            return (
+              <button
+                key={opt.key}
+                onClick={() => setCategory(opt.key)}
+                style={{
+                  flex: 1,
+                  background: active ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
+                  color: active ? 'var(--amber)' : 'var(--fog)',
+                  border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '10px 6px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'Syne, sans-serif',
+                  letterSpacing: '0.3px',
+                }}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
 
         <div style={{ marginBottom: '16px' }}>
           <label style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', display: 'block', marginBottom: '6px' }}>Distance</label>
@@ -171,7 +220,11 @@ export default function HomePage() {
         </div>
 
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '14px' }}>
-          {loading ? 'Loading...' : locStatus === 'asking' ? 'Getting your location...' : `${filtered.length} hotels found`}
+          {loading
+            ? 'Loading...'
+            : locStatus === 'asking'
+              ? 'Getting your location...'
+              : `${filtered.length} ${category === 'rv_park' ? 'RV park' : category === 'hotel' ? 'hotel' : 'place'}${filtered.length !== 1 ? 's' : ''} found`}
         </p>
 
         {filtered.map((h) => {
@@ -182,6 +235,18 @@ export default function HomePage() {
             <div key={h.id} style={{ background: 'var(--night2)', border: h.featured ? '1px solid rgba(245,166,35,0.4)' : '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
                 {h.featured && <span style={{ fontSize: '10px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>★ Boosted</span>}
+                {/* Category pill — small inline. RV Park gets a green tint so the
+                    eye picks it out at a glance when scanning a mixed list. */}
+                <span style={{
+                  fontSize: '10px',
+                  background: h.type === 'rv_park' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)',
+                  color: h.type === 'rv_park' ? '#22c55e' : 'var(--fog)',
+                  padding: '2px 8px', borderRadius: '4px', fontWeight: 700,
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                  border: `1px solid ${h.type === 'rv_park' ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                }}>
+                  {h.type === 'rv_park' ? '🚐 RV Park' : '🏨 Hotel'}
+                </span>
                 {distLabel && <span style={{ fontSize: '11px', color: 'var(--mist)', fontWeight: 600 }}>{distLabel}</span>}
                 {/* Hide the inline price when boosted - it'll show in the big pulsating banner instead */}
                 {!(h.featured && h.boost_price) && (
@@ -256,7 +321,7 @@ export default function HomePage() {
 
         {!loading && filtered.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
-            🛣️ No hotels found. Try expanding your distance filter.
+            🛣️ No {category === 'rv_park' ? 'RV parks' : category === 'hotel' ? 'hotels' : 'places'} found. Try expanding your distance filter{category !== 'all' ? ' or switching to All' : ''}.
           </div>
         )}
       </div>
