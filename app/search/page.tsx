@@ -65,6 +65,12 @@ function SearchResults() {
   const [interstate, setInterstate] = useState<Interstate | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeFilters, setActiveFilters] = useState<string[]>([])
+  // Category toggle: 'all' shows hotels + RV parks together; 'hotel' or
+  // 'rv_park' restricts. Default is 'all' so drivers see everything unless
+  // they explicitly narrow. Filtering happens client-side after fetch — the
+  // dataset for one interstate is small enough that a re-query per toggle
+  // tap would be wasteful.
+  const [category, setCategory] = useState<'all' | 'hotel' | 'rv_park'>('all')
 
   useEffect(() => {
     if (!interstateId) return
@@ -135,7 +141,18 @@ function SearchResults() {
     load()
   }, [interstateId, direction, distance, userLat, userLng])
 
-  const filtered = hotels.filter(h => activeFilters.length === 0 || activeFilters.every(f => h.amenities?.includes(f)))
+  const filtered = hotels.filter(h => {
+    // Category gate first — 'all' lets everything through; otherwise we keep
+    // only rows whose `type` matches. Existing rows without a type set are
+    // treated as 'hotel' (defensive — DB default is 'hotel' so this only
+    // matters for legacy data inserted before the migration).
+    if (category !== 'all') {
+      const t = h.type || 'hotel'
+      if (t !== category) return false
+    }
+    // Then the existing amenity filter.
+    return activeFilters.length === 0 || activeFilters.every(f => h.amenities?.includes(f))
+  })
 
   const trackCall = (hotelId: string) => {
     supabase.from('call_logs').insert({
@@ -163,6 +180,42 @@ function SearchResults() {
               Next {distance >= 9999 ? 'any distance' : `${distance} miles`} ahead
             </p>
           </div>
+        </div>
+
+        {/* Category toggle — All / Hotels / RV Parks. Sits above the amenity
+            filters so drivers narrow by lodging type FIRST, then refine by
+            features (truck parking, etc.). The active button uses the same
+            amber accent the rest of the app uses for selection. */}
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
+          {([
+            { key: 'all',     label: 'All' },
+            { key: 'hotel',   label: 'Hotels' },
+            { key: 'rv_park', label: 'RV Parks' },
+          ] as const).map(opt => {
+            const active = category === opt.key
+            return (
+              <button
+                key={opt.key}
+                onClick={() => setCategory(opt.key)}
+                style={{
+                  flex: 1,
+                  background: active ? 'rgba(245,166,35,0.15)' : 'var(--night2)',
+                  color: active ? 'var(--amber)' : 'var(--fog)',
+                  border: active ? '1px solid var(--amber)' : '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'Syne, sans-serif',
+                  letterSpacing: '0.3px',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
         </div>
 
         {/* Filters */}
@@ -213,7 +266,7 @@ function SearchResults() {
               onPinClick={(id) => router.push(`/hotel/${id}`)}
             />
             <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
-              {filtered.length} hotel{filtered.length !== 1 ? 's' : ''} ahead · {hasGPS ? 'sorted by distance' : 'sorted by mile marker · enable location for distance'}
+              {filtered.length} {category === 'rv_park' ? 'RV park' : category === 'hotel' ? 'hotel' : 'place'}{filtered.length !== 1 ? 's' : ''} ahead · {hasGPS ? 'sorted by distance' : 'sorted by mile marker · enable location for distance'}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {filtered.map(hotel => {
@@ -237,18 +290,30 @@ function SearchResults() {
                       <img src={hotel.photo_url} alt={hotel.name} style={{ width: '100%', height: '140px', objectFit: 'cover' }}/>
                     )}
                     <div style={{ padding: '16px' }}>
-                      {/* Distance badge — honest about what the number means.
-                          With GPS: shows real "X.X MI AWAY" computed via haversine.
-                          Without GPS: shows "MM 141" (mile marker) so drivers don't
-                          misread the highway position number as a driving distance. */}
-                      <div style={{
-                        display: 'inline-block', background: 'rgba(74,158,222,0.15)', color: 'var(--blue)',
-                        padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
-                        fontFamily: 'Syne, sans-serif', letterSpacing: '0.5px', marginBottom: '8px',
-                      }}>
-                        {hasGPS
-                          ? `📍 ~${Math.round(hotel._distance)} MI (approx)`
-                          : `📍 MM ${Math.round(hotel._distance)}`}
+                      {/* Distance + category badges row — both small inline
+                          pills, distance on the left (location-y blue), category
+                          on the right (neutral). RV park is a slightly different
+                          shade so the eye picks it out at a glance. */}
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
+                        <div style={{
+                          display: 'inline-block', background: 'rgba(74,158,222,0.15)', color: 'var(--blue)',
+                          padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                          fontFamily: 'Syne, sans-serif', letterSpacing: '0.5px',
+                        }}>
+                          {hasGPS
+                            ? `📍 ~${Math.round(hotel._distance)} MI (approx)`
+                            : `📍 MM ${Math.round(hotel._distance)}`}
+                        </div>
+                        <div style={{
+                          display: 'inline-block',
+                          background: hotel.type === 'rv_park' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)',
+                          color: hotel.type === 'rv_park' ? '#22c55e' : 'var(--fog)',
+                          border: `1px solid ${hotel.type === 'rv_park' ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                          padding: '2px 9px', borderRadius: '12px', fontSize: '10px', fontWeight: 700,
+                          fontFamily: 'Syne, sans-serif', letterSpacing: '0.5px', textTransform: 'uppercase',
+                        }}>
+                          {hotel.type === 'rv_park' ? '🚐 RV Park' : '🏨 Hotel'}
+                        </div>
                       </div>
 
                       <div style={{ marginBottom: '8px' }}>

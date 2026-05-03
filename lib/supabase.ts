@@ -44,5 +44,13 @@ export type Hotel = {
   boost_ends_at?: string | null
   boost_duration_hr?: 1 | 2 | 3 | null
   last_boost_date?: string | null
+  // Category — 'hotel' (default) or 'rv_park'. Drives the All/Hotels/RV Parks
+  // toggle on the driver page. Adding more categories later (truck_stop, etc.)
+  // is just an ALTER on the DB CHECK constraint.
+  type?: 'hotel' | 'rv_park'
+  // Admin triage from the verification call: high/medium/low (or null).
+  priority?: 'high' | 'medium' | 'low' | null
+  // Free-form notes captured by admin during verification.
+  admin_notes?: string | null
   exits?: Exit & { interstates?: Interstate }
 }

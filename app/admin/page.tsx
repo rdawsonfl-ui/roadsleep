@@ -16,7 +16,9 @@ const AMENITY_OPTIONS = [
 const emptyHotel = {
   name: '', phone: '', address: '', price_min: '', price_max: '',
   amenities: [] as string[], featured: false,
-  photo_url: '', exit_id: ''
+  photo_url: '', exit_id: '',
+  // Category — 'hotel' (default) or 'rv_park'. Driver page filters on this.
+  type: 'hotel' as 'hotel' | 'rv_park',
 }
 
 function AdminPageContent() {
@@ -71,6 +73,7 @@ function AdminPageContent() {
       price_max: form.price_max ? parseInt(form.price_max) : null,
       amenities: form.amenities,
       featured: form.featured, photo_url: form.photo_url, exit_id: form.exit_id,
+      type: form.type || 'hotel',
     }
     if (editId) {
       await supabase.from('hotels').update(payload).eq('id', editId)
@@ -94,6 +97,7 @@ function AdminPageContent() {
       price_min: h.price_min?.toString() || '', price_max: h.price_max?.toString() || '',
       amenities: h.amenities || [],
       featured: h.featured || false, photo_url: h.photo_url || '', exit_id: h.exit_id,
+      type: (h.type === 'rv_park' ? 'rv_park' : 'hotel') as 'hotel' | 'rv_park',
     })
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -217,6 +221,17 @@ function AdminPageContent() {
                 <div style={{ gridColumn: 'span 2' }}>
                   <label className="dark-label">Hotel Name *</label>
                   <input className="dark-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Sleep Inn I-95"/>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label className="dark-label">Category</label>
+                  <select
+                    className="dark-input"
+                    value={form.type || 'hotel'}
+                    onChange={e => setForm(f => ({ ...f, type: e.target.value as 'hotel' | 'rv_park' }))}
+                  >
+                    <option value="hotel">🏨 Hotel</option>
+                    <option value="rv_park">🚐 RV Park</option>
+                  </select>
                 </div>
                 <div>
                   <label className="dark-label">Phone</label>
@@ -358,6 +373,17 @@ function AdminPageContent() {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 600, color: 'var(--white)', fontSize: '13px' }}>{h.name}</span>
+                            {/* Category pill — small, inline. RV Park gets a green
+                                tint so admins can scan a long list quickly. */}
+                            <span style={{
+                              fontSize: '10px',
+                              background: h.type === 'rv_park' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)',
+                              color: h.type === 'rv_park' ? '#22c55e' : 'var(--fog)',
+                              padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                              border: `1px solid ${h.type === 'rv_park' ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
+                            }}>
+                              {h.type === 'rv_park' ? '🚐 RV' : '🏨 Hotel'}
+                            </span>
                             {h.verified ? (
                               <span style={{
                                 fontSize: '10px', background: 'rgba(34,197,94,0.15)', color: '#22c55e',
