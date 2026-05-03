@@ -174,16 +174,28 @@ export default function HomePage() {
   return (
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '20px 16px 48px' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+        {/* Title + subtitle adapt to the active category. Hotels typically
+            sit AT exits (their whole business model is catching tired drivers
+            exiting the highway), so 'next exit' is accurate for hotels. RV
+            parks sit OFF the highway, often 5–20 mi out, so 'next exit' is
+            misleading for them — instead we say 'ahead on your route' since
+            we surface them sorted by closeness to the driver's route. */}
         <h1 style={{ fontSize: '26px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '4px' }}>
-          {category === 'rv_park' ? 'RV Parks' : 'Hotels'} at your <span style={{ color: 'var(--amber)' }}>next exit</span>
+          {category === 'rv_park' ? (
+            <>RV Parks <span style={{ color: 'var(--amber)' }}>ahead on your route</span></>
+          ) : (
+            <>Hotels at your <span style={{ color: 'var(--amber)' }}>next exit</span></>
+          )}
         </h1>
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '20px' }}>
-          {category === 'rv_park' ? 'RV parks along major interstates' : 'Hotels along major interstates'}
+          {category === 'rv_park'
+            ? 'RV parks within driving distance of your interstate'
+            : 'Hotels along major interstates'}
         </p>
 
         {locStatus === 'denied' && (
           <div style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: 'var(--mist)' }}>
-            📍 Location blocked. Distance filtering disabled. <button onClick={() => window.location.reload()} style={{ background: 'none', border: 'none', color: 'var(--amber)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>Enable GPS</button> to see nearest hotels.
+            📍 Location blocked. Distance filtering disabled. <button onClick={() => window.location.reload()} style={{ background: 'none', border: 'none', color: 'var(--amber)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>Enable GPS</button> to see nearest {category === 'rv_park' ? 'RV parks' : 'hotels'}.
           </div>
         )}
 
