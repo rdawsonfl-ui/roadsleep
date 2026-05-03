@@ -67,7 +67,14 @@ export default function HomePage() {
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [loading, setLoading] = useState(true)
   const [maxPrice, setMaxPrice] = useState(200)
-  const [distance, setDistance] = useState<'10' | '30' | '60' | 'closest'>('30')
+  // Distance preset: 'closest' shows everything sorted by closest first.
+  // Numeric values cap to that many miles. Default = 'closest' so drivers
+  // see results immediately without picking a distance — tap More Filters
+  // to narrow if they want.
+  const [distance, setDistance] = useState<'10' | '30' | '60' | '120' | 'closest'>('closest')
+  // Whether the More Filters panel is expanded. Collapsed by default —
+  // most drivers just want the closest option and shouldn't see clutter.
+  const [showFilters, setShowFilters] = useState(false)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
@@ -129,12 +136,15 @@ export default function HomePage() {
   filtered = filtered.filter((h) => (h.type || 'hotel') === category)
 
   if (userLoc) {
-    if (distance === '10') {
-      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= 10)
-    } else if (distance === '30') {
-      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= 30)
-    } else if (distance === '60') {
-      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= 60)
+    // Numeric presets (10/30/60/120) cap to that many miles. 'closest'
+    // doesn't filter — it just sorts (handled below).
+    const cap = distance === '10' ? 10
+              : distance === '30' ? 30
+              : distance === '60' ? 60
+              : distance === '120' ? 120
+              : null
+    if (cap !== null) {
+      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= cap)
     }
   }
 
@@ -210,25 +220,95 @@ export default function HomePage() {
           })}
         </div>
 
+        {/* More Filters — collapsed by default. Default behavior is 'closest'
+            (sort by distance, no cap), which is what most drivers want. Tap
+            this to reveal distance caps and price filter for refinement. */}
         <div style={{ marginBottom: '16px' }}>
-          <label style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', display: 'block', marginBottom: '6px' }}>Distance</label>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {(['10','30','60','closest'] as const).map((d) => (
-              <button key={d} onClick={() => setDistance(d)} style={{
-                background: distance === d ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
-                color: distance === d ? 'var(--amber)' : 'var(--fog)',
-                border: distance === d ? '1px solid var(--amber)' : '1px solid var(--border)',
-                padding: '6px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              }}>{d === 'closest' ? 'Closest' : `${d} mi`}</button>
-            ))}
-          </div>
-        </div>
+          <button
+            onClick={() => setShowFilters(s => !s)}
+            style={{
+              width: '100%',
+              background: 'transparent',
+              color: 'var(--fog)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '10px 14px',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontFamily: 'DM Sans, sans-serif',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>
+              ⚙️ More Filters
+              {/* If the user has narrowed away from defaults, show a small badge
+                  so they remember they're filtered. */}
+              {(distance !== 'closest' || maxPrice !== 200) && (
+                <span style={{
+                  marginLeft: '8px', background: 'var(--amber)', color: 'var(--night)',
+                  padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
+                }}>
+                  on
+                </span>
+              )}
+            </span>
+            <span style={{ fontSize: '11px' }}>{showFilters ? '▲' : '▼'}</span>
+          </button>
 
-        <div style={{ marginBottom: '20px' }}>
-          <div style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: '6px' }}>
-            Max price: <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '13px' }}>${maxPrice}</span>
-          </div>
-          <input type="range" min="50" max="300" value={maxPrice} onChange={(e) => setMaxPrice(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--amber)' }} />
+          {showFilters && (
+            <div style={{
+              marginTop: '10px', padding: '14px',
+              background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '10px',
+            }}>
+              {/* Distance options */}
+              <label style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', display: 'block', marginBottom: '8px' }}>
+                Distance
+              </label>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                {(['closest','10','30','60','120'] as const).map((d) => (
+                  <button key={d} onClick={() => setDistance(d)} style={{
+                    background: distance === d ? 'rgba(245,166,35,0.15)' : 'var(--night3)',
+                    color: distance === d ? 'var(--amber)' : 'var(--fog)',
+                    border: distance === d ? '1px solid var(--amber)' : '1px solid var(--border)',
+                    padding: '7px 14px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  }}>{d === 'closest' ? 'Any (closest first)' : `${d} mi`}</button>
+                ))}
+              </div>
+
+              {/* Max price slider — kept here for drivers paying out-of-pocket
+                  who care about $79 vs $200/night. Hidden by default since most
+                  drivers don't filter on price. */}
+              <div style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: '6px' }}>
+                Max price: <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '13px' }}>${maxPrice}</span>
+              </div>
+              <input type="range" min="50" max="300" value={maxPrice}
+                onChange={(e) => setMaxPrice(parseInt(e.target.value))}
+                style={{ width: '100%', accentColor: 'var(--amber)' }} />
+
+              {/* Reset row — quick way back to defaults if a driver got narrowed
+                  into a corner with zero results. */}
+              {(distance !== 'closest' || maxPrice !== 200) && (
+                <button
+                  onClick={() => { setDistance('closest'); setMaxPrice(200) }}
+                  style={{
+                    marginTop: '10px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--red)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'DM Sans, sans-serif',
+                  }}
+                >
+                  Reset filters
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '14px' }}>
