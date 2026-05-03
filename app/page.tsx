@@ -220,6 +220,34 @@ export default function HomePage() {
           })}
         </div>
 
+        {/* Closest button — small, centered, sits between the big category
+            toggle and the More Filters dropdown. Filled when active (default
+            state), outlined when user has narrowed to a specific distance.
+            Tapping it always resets distance to 'closest'. Width is roughly
+            half the category buttons, lined up under them. */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+          <button
+            onClick={() => setDistance('closest')}
+            style={{
+              width: '48%',
+              background: distance === 'closest' ? 'var(--amber)' : 'transparent',
+              color:      distance === 'closest' ? 'var(--night)' : 'var(--amber)',
+              border: '2px solid var(--amber)',
+              borderRadius: '10px',
+              padding: '10px 12px',
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontFamily: 'Syne, sans-serif',
+              letterSpacing: '0.4px',
+              minHeight: '40px',
+              transition: 'all 0.15s',
+            }}
+          >
+            📍 Closest
+          </button>
+        </div>
+
         {/* More Filters — collapsed by default. Default behavior is 'closest'
             (sort by distance, no cap), which is what most drivers want. Tap
             this to reveal distance caps and price filter for refinement. */}
