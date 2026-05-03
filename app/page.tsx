@@ -83,6 +83,10 @@ export default function HomePage() {
   // Default = Hotels because supply is heavier (188 vs 37) and the majority
   // of road travelers want hotels. RV users will tap the other button.
   const [category, setCategory] = useState<'hotel' | 'rv_park'>('hotel')
+  // When the driver taps GO! we don't navigate immediately — we show a small
+  // confirmation modal first so they can back out if they change their mind.
+  // Holds the hotel they're considering. null = no modal showing.
+  const [directionsTarget, setDirectionsTarget] = useState<Hotel | null>(null)
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -466,13 +470,13 @@ export default function HomePage() {
                 <a href={`tel:${h.phone || ''}`} onClick={() => logCall(h.id)} style={{ flex: 2.2, background: 'var(--amber)', color: '#000', padding: '13px 10px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                   ☎ Call Front Desk
                 </a>
-                {/* GO! opens directions in the SAME tab so the iPhone Safari
-                    back button returns the driver to their roadsleep results
-                    if they change their mind. Previously target=_blank pushed
-                    them out to Google Maps with no easy way back. */}
-                <a href={directionsUrl(h)} aria-label={`Get directions to ${h.name}`} style={{ flex: 1, background: '#16a34a', color: '#fff', padding: '13px 10px', borderRadius: '8px', fontSize: '17px', fontWeight: 900, textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: '0.02em' }}>
+                {/* GO! opens a confirmation modal first so drivers can back
+                    out cleanly. Tapping a regular link sends them to Google
+                    Maps and they have no easy 'wait, never mind' option once
+                    they leave Safari. The modal puts the brakes on. */}
+                <button onClick={() => setDirectionsTarget(h)} aria-label={`Get directions to ${h.name}`} style={{ flex: 1, background: '#16a34a', color: '#fff', padding: '13px 10px', borderRadius: '8px', fontSize: '17px', fontWeight: 900, border: 'none', cursor: 'pointer', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: '0.02em', fontFamily: 'inherit' }}>
                   GO!
-                </a>
+                </button>
               </div>
             </div>
           )
@@ -484,6 +488,92 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Directions confirmation modal — shows when driver taps GO! Gives
+          them a clear chance to back out before leaving the app for Google
+          Maps. The big green Open button confirms; the gray Cancel keeps
+          them in roadsleep with results intact. Backdrop tap also cancels. */}
+      {directionsTarget && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="directions-title"
+          onClick={() => setDirectionsTarget(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          {/* Stop click-through on the modal panel itself so taps inside don't dismiss */}
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--night2)',
+              border: '1px solid var(--border)',
+              borderRadius: '14px',
+              padding: '20px',
+              maxWidth: '420px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+            }}
+          >
+            <h2 id="directions-title" style={{
+              fontFamily: 'Syne, sans-serif', fontSize: '18px', fontWeight: 700,
+              color: 'var(--white)', marginBottom: '6px',
+            }}>
+              📍 Get directions?
+            </h2>
+            <p style={{ fontSize: '14px', color: 'var(--mist)', marginBottom: '4px' }}>
+              {directionsTarget.name}
+            </p>
+            <p style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '20px' }}>
+              This will open Google Maps. Tap Cancel to stay on RoadSleep.
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setDirectionsTarget(null)}
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  color: 'var(--fog)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+              <a
+                href={directionsUrl(directionsTarget)}
+                onClick={() => setDirectionsTarget(null)}
+                style={{
+                  flex: 1.4,
+                  background: '#16a34a',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  textAlign: 'center',
+                  fontFamily: 'inherit',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                Open Directions
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
