@@ -466,7 +466,11 @@ export default function HomePage() {
                 <a href={`tel:${h.phone || ''}`} onClick={() => logCall(h.id)} style={{ flex: 2.2, background: 'var(--amber)', color: '#000', padding: '13px 10px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                   ☎ Call Front Desk
                 </a>
-                <a href={directionsUrl(h)} target="_blank" rel="noopener noreferrer" aria-label={`Get directions to ${h.name}`} style={{ flex: 1, background: '#16a34a', color: '#fff', padding: '13px 10px', borderRadius: '8px', fontSize: '17px', fontWeight: 900, textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: '0.02em' }}>
+                {/* GO! opens directions in the SAME tab so the iPhone Safari
+                    back button returns the driver to their roadsleep results
+                    if they change their mind. Previously target=_blank pushed
+                    them out to Google Maps with no easy way back. */}
+                <a href={directionsUrl(h)} aria-label={`Get directions to ${h.name}`} style={{ flex: 1, background: '#16a34a', color: '#fff', padding: '13px 10px', borderRadius: '8px', fontSize: '17px', fontWeight: 900, textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: '0.02em' }}>
                   GO!
                 </a>
               </div>
