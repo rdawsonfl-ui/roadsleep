@@ -66,7 +66,11 @@ async function logCall(hotelId: string) {
 export default function HomePage() {
   const [hotels, setHotels] = useState<Hotel[]>([])
   const [loading, setLoading] = useState(true)
-  const [maxPrice, setMaxPrice] = useState(200)
+  // NOTE: a max-price slider used to live here. Pulled because the price
+  // data we have on hotels is not consistently up-to-date — filtering on
+  // it would silently hide listings the driver would actually want. We can
+  // bring it back once we trust price freshness (e.g. after hoteliers
+  // self-update via their dashboard, or after a periodic refresh job).
   // Distance preset: 'closest' shows everything sorted by closest first.
   // Numeric values cap to that many miles. Default = 'closest' so drivers
   // see results immediately without picking a distance — tap More Filters
@@ -135,7 +139,7 @@ export default function HomePage() {
     return { ...h, distance: dist }
   })
 
-  let filtered = hotelsWithDistance.filter((h) => !h.price_min || h.price_min <= maxPrice)
+  let filtered = [...hotelsWithDistance]
 
   // Category gate — restrict by selected type. Treat null/undefined type as
   // 'hotel' (DB default) so legacy rows aren't accidentally hidden when the
@@ -303,7 +307,7 @@ export default function HomePage() {
               ⚙️ More Filters
               {/* If the user has narrowed away from defaults, show a small badge
                   so they remember they're filtered. */}
-              {(distance !== 'closest' || maxPrice !== 200) && (
+              {distance !== 'closest' && (
                 <span style={{
                   marginLeft: '8px', background: 'var(--amber)', color: 'var(--night)',
                   padding: '1px 7px', borderRadius: '10px', fontSize: '10px', fontWeight: 700,
@@ -335,23 +339,13 @@ export default function HomePage() {
                 ))}
               </div>
 
-              {/* Max price slider — kept here for drivers paying out-of-pocket
-                  who care about $79 vs $200/night. Hidden by default since most
-                  drivers don't filter on price. */}
-              <div style={{ color: 'var(--fog)', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: '6px' }}>
-                Max price: <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '13px' }}>${maxPrice}</span>
-              </div>
-              <input type="range" min="50" max="300" value={maxPrice}
-                onChange={(e) => setMaxPrice(parseInt(e.target.value))}
-                style={{ width: '100%', accentColor: 'var(--amber)' }} />
-
               {/* Reset row — quick way back to defaults if a driver got narrowed
                   into a corner with zero results. */}
-              {(distance !== 'closest' || maxPrice !== 200) && (
+              {distance !== 'closest' && (
                 <button
-                  onClick={() => { setDistance('closest'); setMaxPrice(200) }}
+                  onClick={() => setDistance('closest')}
                   style={{
-                    marginTop: '10px',
+                    marginTop: '4px',
                     background: 'transparent',
                     border: 'none',
                     color: 'var(--red)',
