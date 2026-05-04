@@ -312,7 +312,11 @@ export default function HotelierPortal() {
     } else {
       const { error } = await supabase.from('hotels').insert(payload)
       if (error) { setErr('Could not create hotel.'); setSaving(false); return }
-      setMsg('✓ Hotel listed! Drivers can now find you.')
+      // Honest about the actual state: the row inserts with verified=false
+      // and is hidden from drivers until admin manually verifies. Telling
+      // the owner 'drivers can now find you' would be wrong, and they'd
+      // wonder why no calls came in. Set expectations up front.
+      setMsg('✓ Account created! We\u2019ll call within 48 hours to verify your hotel and activate your listing for drivers.')
     }
     await loadAll(hotelier.id); setSaving(false); setView('dashboard')
   }
