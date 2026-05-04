@@ -14,7 +14,11 @@ const AMENITY_OPTIONS = [
 ]
 
 const emptyHotel = {
-  name: '', phone: '', address: '', price_min: '', price_max: '',
+  name: '', phone: '', address: '',
+  // Structured address — preferred over the legacy single 'address' field.
+  // 'address' stays around as a fallback so old data still renders.
+  street_address: '', city: '', state: '', zip: '',
+  price_min: '', price_max: '',
   amenities: [] as string[], featured: false,
   photo_url: '', exit_id: '',
   // Category — 'hotel' (default) or 'rv_park'. Driver page filters on this.
@@ -71,8 +75,23 @@ function AdminPageContent() {
   async function saveHotel() {
     if (!form.name || !form.exit_id) { flash('Name and exit are required'); return }
     setLoading(true)
+    // Compose the legacy 'address' field from the structured pieces so any
+    // code path still reading from it gets the freshly typed data. Format:
+    //   "street, city, state zip" — skip empty pieces gracefully.
+    const composedAddress = [
+      form.street_address?.trim(),
+      form.city?.trim(),
+      [form.state?.trim(), form.zip?.trim()].filter(Boolean).join(' ').trim(),
+    ].filter(Boolean).join(', ')
+
     const payload = {
-      name: form.name, phone: form.phone, address: form.address,
+      name: form.name, phone: form.phone,
+      // Both the legacy and new fields get saved.
+      address: composedAddress || form.address,
+      street_address: form.street_address || null,
+      city:           form.city           || null,
+      state:          form.state          || null,
+      zip:            form.zip            || null,
       price_min: form.price_min ? parseInt(form.price_min) : null,
       price_max: form.price_max ? parseInt(form.price_max) : null,
       amenities: form.amenities,
@@ -98,6 +117,10 @@ function AdminPageContent() {
     setEditId(h.id)
     setForm({
       name: h.name, phone: h.phone || '', address: h.address || '',
+      street_address: h.street_address || '',
+      city:           h.city || '',
+      state:          h.state || '',
+      zip:            h.zip || '',
       price_min: h.price_min?.toString() || '', price_max: h.price_max?.toString() || '',
       amenities: h.amenities || [],
       featured: h.featured || false, photo_url: h.photo_url || '', exit_id: h.exit_id,
@@ -252,9 +275,34 @@ function AdminPageContent() {
                     ))}
                   </select>
                 </div>
+                {/* Structured address — replaces the old freeform single-field
+                    'address' input. Better data quality, easier filtering, and
+                    matches what hoteliers actually have on a business card.
+                    The legacy 'address' column still exists in the DB; we
+                    auto-compose it on save for backwards compatibility. */}
                 <div style={{ gridColumn: 'span 2' }}>
-                  <label className="dark-label">Address</label>
-                  <input className="dark-input" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Highway Dr, City, ST"/>
+                  <label className="dark-label">Street Address</label>
+                  <input className="dark-input" value={form.street_address}
+                    onChange={e => setForm(f => ({ ...f, street_address: e.target.value }))}
+                    placeholder="123 Highway Dr"/>
+                </div>
+                <div>
+                  <label className="dark-label">City</label>
+                  <input className="dark-input" value={form.city}
+                    onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+                    placeholder="Macon"/>
+                </div>
+                <div>
+                  <label className="dark-label">State</label>
+                  <input className="dark-input" value={form.state}
+                    onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))}
+                    placeholder="GA" maxLength={2}/>
+                </div>
+                <div>
+                  <label className="dark-label">ZIP</label>
+                  <input className="dark-input" value={form.zip}
+                    onChange={e => setForm(f => ({ ...f, zip: e.target.value }))}
+                    placeholder="31201"/>
                 </div>
                 <div>
                   <label className="dark-label">Price Min ($/night)</label>

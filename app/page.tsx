@@ -22,6 +22,12 @@ type Hotel = {
   // shown above the Call/Go buttons. true = admin has personally called
   // and confirmed the front desk number works.
   verified?: boolean | null
+  // Structured address. We prefer these over the legacy single 'address'
+  // field. Either source can be used to compose what we show / send to maps.
+  street_address?: string | null
+  city?: string | null
+  state?: string | null
+  zip?: string | null
   // Category — drives the All / Hotels / RV Parks toggle. Defaults to 'hotel'
   // server-side so legacy/null rows always render under the Hotels view.
   type?: 'hotel' | 'rv_park' | null
@@ -35,14 +41,29 @@ type Hotel = {
   distance: number | null
 }
 
+/** Build a single-line address from the structured fields, falling back
+ *  to the legacy 'address' column. Used for both card display and the
+ *  directions URL. Skips empty parts gracefully so we don't end up with
+ *  ugly leading commas or double-spaces. */
+function composeAddress(h: Hotel): string {
+  const parts = [
+    h.street_address?.trim(),
+    h.city?.trim(),
+    [h.state?.trim(), h.zip?.trim()].filter(Boolean).join(' ').trim(),
+  ].filter(Boolean)
+  if (parts.length > 0) return parts.join(', ')
+  return h.address?.trim() || ''
+}
+
 function directionsUrl(h: Hotel): string {
   const lat = h.latitude ?? h.exits?.lat
   const lng = h.longitude ?? h.exits?.lng
   if (lat && lng) {
     return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
   }
-  if (h.address) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(h.address)}`
+  const addr = composeAddress(h)
+  if (addr) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`
   }
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name)}`
 }
@@ -114,7 +135,7 @@ export default function HomePage() {
       try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .select('id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
         .eq('verified', true)
         .limit(200)
       if (data) {
@@ -352,7 +373,7 @@ export default function HomePage() {
               ) : (
                 exitLabel && <p style={{ fontSize: '11px', color: 'var(--fog)', marginBottom: '4px' }}>{exitLabel}</p>
               )}
-              <p style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '10px' }}>{h.address || ''}</p>
+              <p style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '10px' }}>{composeAddress(h)}</p>
               {h.amenities && h.amenities.length > 0 && (
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
                   {h.amenities.slice(0, 4).map((a) => (
