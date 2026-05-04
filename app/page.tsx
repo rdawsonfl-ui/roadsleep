@@ -18,6 +18,10 @@ type Hotel = {
   // featured doubles as 'currently boosted'; boost_price is the discount.
   boost_price: number | null
   boost_ends_at: string | null
+  // Verification status — drives the '✔ Front desk confirmed' trust badge
+  // shown above the Call/Go buttons. true = admin has personally called
+  // and confirmed the front desk number works.
+  verified?: boolean | null
   // Category — drives the All / Hotels / RV Parks toggle. Defaults to 'hotel'
   // server-side so legacy/null rows always render under the Hotels view.
   type?: 'hotel' | 'rv_park' | null
@@ -110,7 +114,7 @@ export default function HomePage() {
       try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
       const { data } = await supabase
         .from('hotels')
-        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
+        .select('id,name,phone,address,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
         .eq('verified', true)
         .limit(200)
       if (data) {
