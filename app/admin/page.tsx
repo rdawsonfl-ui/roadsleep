@@ -261,7 +261,10 @@ function AdminPageContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="dark-label">Phone</label>
+                  <label className="dark-label">
+                    Phone
+                    {editId && !form.phone?.trim() && <MissingDot />}
+                  </label>
                   <input className="dark-input" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="555-123-4567"/>
                 </div>
                 <div>
@@ -281,25 +284,37 @@ function AdminPageContent() {
                     The legacy 'address' column still exists in the DB; we
                     auto-compose it on save for backwards compatibility. */}
                 <div style={{ gridColumn: 'span 2' }}>
-                  <label className="dark-label">Street Address</label>
+                  <label className="dark-label">
+                    Street Address
+                    {editId && !form.street_address?.trim() && <MissingDot />}
+                  </label>
                   <input className="dark-input" value={form.street_address}
                     onChange={e => setForm(f => ({ ...f, street_address: e.target.value }))}
                     placeholder="123 Highway Dr"/>
                 </div>
                 <div>
-                  <label className="dark-label">City</label>
+                  <label className="dark-label">
+                    City
+                    {editId && !form.city?.trim() && <MissingDot />}
+                  </label>
                   <input className="dark-input" value={form.city}
                     onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
                     placeholder="Macon"/>
                 </div>
                 <div>
-                  <label className="dark-label">State</label>
+                  <label className="dark-label">
+                    State
+                    {editId && !form.state?.trim() && <MissingDot />}
+                  </label>
                   <input className="dark-input" value={form.state}
                     onChange={e => setForm(f => ({ ...f, state: e.target.value.toUpperCase().slice(0, 2) }))}
                     placeholder="GA" maxLength={2}/>
                 </div>
                 <div>
-                  <label className="dark-label">ZIP</label>
+                  <label className="dark-label">
+                    ZIP
+                    {editId && !form.zip?.trim() && <MissingDot />}
+                  </label>
                   <input className="dark-input" value={form.zip}
                     onChange={e => setForm(f => ({ ...f, zip: e.target.value }))}
                     placeholder="31201"/>
@@ -761,6 +776,31 @@ export const dynamic = 'force-dynamic'
 // ─────────────────────────────────────────────────────────────────────────
 // Per-row subcomponents for priority + notes
 // ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * MissingDot — small amber dot rendered next to a field label when the value
+ * is empty and we're editing an existing hotel. Lets admin scan an Edit form
+ * during a phone verification call and immediately see which fields still
+ * need filling. Hidden on the new-hotel form (everything would be dotted).
+ */
+function MissingDot() {
+  return (
+    <span
+      title="Missing — fill in during verification call"
+      aria-label="missing"
+      style={{
+        display: 'inline-block',
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        background: 'var(--amber)',
+        marginLeft: '6px',
+        verticalAlign: 'middle',
+        boxShadow: '0 0 0 2px rgba(245,166,35,0.18)',
+      }}
+    />
+  )
+}
 
 /**
  * PriorityRow — three pill buttons (HIGH / MED / LOW) showing the current
