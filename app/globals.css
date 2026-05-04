@@ -104,9 +104,16 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
 /* Admin hotel-card row — desktop stays side-by-side (info | actions),
    mobile stacks vertically so action buttons don't overlap the hotel name.
    Breakpoint at 640px matches typical phone widths. */
-.admin-hotel-row {
-  padding: 14px 20px;
+/* The card wrapper now hosts the row + a full-width notes slot below.
+   The border-bottom moves here from .admin-hotel-row so each card is
+   one visual unit. The row itself stays a flex row of info + actions. */
+.admin-hotel-card {
   border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+}
+.admin-hotel-row {
+  padding: 0;
+  border-bottom: none;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -123,7 +130,17 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+/* Notes slot — full width of the card on desktop so the textarea finally
+   has room to breathe. Was previously crammed into the right action column
+   with a tiny ~200px width while a big chunk of card space sat empty. */
+.admin-hotel-notes {
+  margin-top: 10px;
+  width: 100%;
+}
 @media (max-width: 640px) {
+  .admin-hotel-card {
+    padding: 12px 16px;
+  }
   .admin-hotel-row {
     flex-direction: column;
     align-items: stretch;

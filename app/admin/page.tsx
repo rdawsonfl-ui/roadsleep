@@ -411,7 +411,8 @@ function AdminPageContent() {
                     .map(h => {
                     const exit = h.exits
                     return (
-                      <div key={h.id} className="admin-hotel-row">
+                      <div key={h.id} className="admin-hotel-card">
+                      <div className="admin-hotel-row">
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 600, color: 'var(--white)', fontSize: '13px' }}>{h.name}</span>
@@ -499,14 +500,18 @@ function AdminPageContent() {
                             value={h.priority}
                             onSet={(level) => setPriority(h.id, h.priority, level)}
                           />
-
-                          {/* Admin-only notes from the call. Saves on blur so we
-                              don't hammer the DB on every keystroke. */}
-                          <NotesField
-                            initial={h.admin_notes || ''}
-                            onSave={(v) => saveNotes(h.id, v)}
-                          />
                         </div>
+                      </div>
+                      {/* Notes textarea sits in its own row below — full width
+                          on desktop, where there used to be lots of empty dark
+                          space next to the cramped right action column. Auto-
+                          grows from 3 to 6 rows on big screens for real notes. */}
+                      <div className="admin-hotel-notes">
+                        <NotesField
+                          initial={h.admin_notes || ''}
+                          onSave={(v) => saveNotes(h.id, v)}
+                        />
+                      </div>
                       </div>
                     )
                   })}
@@ -767,28 +772,30 @@ function NotesField({ initial, onSave }: {
   const [val, setVal] = useState(initial)
   const [saved, setSaved] = useState(true)
   return (
-    <div style={{ marginTop: '6px', position: 'relative' }}>
+    <div style={{ marginTop: '4px', position: 'relative' }}>
       <textarea
         value={val}
         onChange={e => { setVal(e.target.value); setSaved(false) }}
         onBlur={() => { if (!saved) { onSave(val); setSaved(true) } }}
-        placeholder="📝 Notes from call (e.g. 'rude', 'no truck parking', 'call back Tue')"
-        rows={2}
+        placeholder="📝 Notes from call (e.g. 'Sarah owner, $69 cash, ask for room 12', 'no truck parking', 'call back Tue', 'rude — sink lower in sort')"
+        rows={4}
         style={{
           width: '100%',
           background: 'var(--night3)',
           border: '1px solid var(--border)',
           borderRadius: '8px',
-          padding: '6px 8px',
+          padding: '10px 12px',
           color: 'var(--white)',
-          fontSize: '12px',
+          fontSize: '13px',
           fontFamily: 'DM Sans, sans-serif',
+          lineHeight: 1.5,
           resize: 'vertical',
           boxSizing: 'border-box',
+          minHeight: '64px',
         }}
       />
       {!saved && (
-        <span style={{ position: 'absolute', right: '8px', top: '4px', fontSize: '10px', color: 'var(--amber)' }}>
+        <span style={{ position: 'absolute', right: '10px', top: '8px', fontSize: '10px', color: 'var(--amber)' }}>
           unsaved · click out to save
         </span>
       )}
