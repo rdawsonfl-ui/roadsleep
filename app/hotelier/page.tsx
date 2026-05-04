@@ -423,9 +423,9 @@ export default function HotelierPortal() {
     <main style={{ background:'var(--night)', minHeight:'calc(100vh - 56px)', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px 20px' }}>
       <div style={{ width:'100%', maxWidth:'420px' }}>
         <div style={{ textAlign:'center', marginBottom:'32px' }}>
-          <div style={{ fontSize:'36px', marginBottom:'8px' }}>🏨</div>
+          <div style={{ fontSize:'36px', marginBottom:'8px' }}>🏨 🚐</div>
           <h1 style={{ fontSize:'26px', fontFamily:'Syne, sans-serif', fontWeight:800, color:'var(--white)', letterSpacing:'-0.5px' }}>
-            Hotelier <span style={{ color:'var(--amber)' }}>Portal</span>
+            Hotel/Park <span style={{ color:'var(--amber)' }}>Owner</span>
           </h1>
           <p style={{ color:'var(--fog)', fontSize:'13px', marginTop:'6px' }}>List your property · Track calls · No commissions</p>
         </div>
