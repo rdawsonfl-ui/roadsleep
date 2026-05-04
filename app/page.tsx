@@ -86,10 +86,6 @@ export default function HomePage() {
   // Default = Hotels because supply is heavier (188 vs 37) and the majority
   // of road travelers want hotels. RV users will tap the other button.
   const [category, setCategory] = useState<'hotel' | 'rv_park'>('hotel')
-  // When the driver taps GO! we don't navigate immediately — we show a small
-  // confirmation modal first so they can back out if they change their mind.
-  // Holds the hotel they're considering. null = no modal showing.
-  const [directionsTarget, setDirectionsTarget] = useState<Hotel | null>(null)
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -404,17 +400,78 @@ export default function HomePage() {
                   </div>
                 </div>
               )}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <a href={`tel:${h.phone || ''}`} onClick={() => logCall(h.id)} style={{ flex: 2.2, background: 'var(--amber)', color: '#000', padding: '13px 10px', borderRadius: '8px', fontSize: '14px', fontWeight: 700, textDecoration: 'none', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                  ☎ Call Front Desk
+              {/* Trust signal — small green confirmation that the front desk
+                  has been called and verified. Only renders when verified=true.
+                  Sits directly above the action row so it directly modifies
+                  the perceived legitimacy of the Call button. NOT bold per
+                  spec; small text, secondary visual weight. */}
+              {h.verified && (
+                <p style={{
+                  fontSize: '13px',
+                  color: '#22c55e',
+                  marginBottom: '8px',
+                  fontWeight: 500,
+                  letterSpacing: '0.2px',
+                }}>
+                  ✔ Front desk confirmed
+                </p>
+              )}
+              {/* Action row — CALL is the primary action (~67% width, solid
+                  orange, big bold), GO is secondary (~33% width, outlined
+                  orange, lighter). Per spec: zero friction to act. Both
+                  buttons are 56px tall for tired drivers; minimum touch
+                  target on mobile. Go opens directions immediately — no
+                  more confirmation modal. */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <a
+                  href={`tel:${h.phone || ''}`}
+                  onClick={() => logCall(h.id)}
+                  aria-label={`Call ${h.name}`}
+                  style={{
+                    flex: 2,                          // ~67% of row
+                    height: '56px',
+                    background: '#FF6A00',
+                    color: '#FFFFFF',
+                    borderRadius: '12px',
+                    padding: '0 16px',
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
+                  <span>Call</span>
                 </a>
-                {/* GO! opens a confirmation modal first so drivers can back
-                    out cleanly. Tapping a regular link sends them to Google
-                    Maps and they have no easy 'wait, never mind' option once
-                    they leave Safari. The modal puts the brakes on. */}
-                <button onClick={() => setDirectionsTarget(h)} aria-label={`Get directions to ${h.name}`} style={{ flex: 1, background: '#16a34a', color: '#fff', padding: '13px 10px', borderRadius: '8px', fontSize: '17px', fontWeight: 900, border: 'none', cursor: 'pointer', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: '0.02em', fontFamily: 'inherit' }}>
-                  GO!
-                </button>
+                <a
+                  href={directionsUrl(h)}
+                  aria-label={`Directions to ${h.name}`}
+                  style={{
+                    flex: 1,                          // ~33% of row
+                    height: '56px',
+                    background: 'transparent',
+                    color: '#FF6A00',
+                    border: '1px solid #FF6A00',
+                    borderRadius: '12px',
+                    padding: '0 16px',
+                    fontSize: '16px',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden="true">➤</span>
+                  <span>Go</span>
+                </a>
               </div>
             </div>
           )
@@ -427,91 +484,9 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Directions confirmation modal — shows when driver taps GO! Gives
-          them a clear chance to back out before leaving the app for Google
-          Maps. The big green Open button confirms; the gray Cancel keeps
-          them in roadsleep with results intact. Backdrop tap also cancels. */}
-      {directionsTarget && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="directions-title"
-          onClick={() => setDirectionsTarget(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            background: 'rgba(0,0,0,0.65)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          {/* Stop click-through on the modal panel itself so taps inside don't dismiss */}
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--night2)',
-              border: '1px solid var(--border)',
-              borderRadius: '14px',
-              padding: '20px',
-              maxWidth: '420px',
-              width: '100%',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-            }}
-          >
-            <h2 id="directions-title" style={{
-              fontFamily: 'Syne, sans-serif', fontSize: '18px', fontWeight: 700,
-              color: 'var(--white)', marginBottom: '6px',
-            }}>
-              📍 Get directions?
-            </h2>
-            <p style={{ fontSize: '14px', color: 'var(--mist)', marginBottom: '4px' }}>
-              {directionsTarget.name}
-            </p>
-            <p style={{ fontSize: '12px', color: 'var(--fog)', marginBottom: '20px' }}>
-              This will open Google Maps. Tap Cancel to stay on RoadSleep.
-            </p>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setDirectionsTarget(null)}
-                style={{
-                  flex: 1,
-                  background: 'transparent',
-                  color: 'var(--fog)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  fontSize: '14px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Cancel
-              </button>
-              <a
-                href={directionsUrl(directionsTarget)}
-                onClick={() => setDirectionsTarget(null)}
-                style={{
-                  flex: 1.4,
-                  background: '#16a34a',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '10px',
-                  padding: '12px',
-                  fontSize: '14px',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                  fontFamily: 'inherit',
-                  letterSpacing: '0.02em',
-                }}
-              >
-                Open Directions
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* (Directions confirmation modal removed per spec — Go button now
+          opens Maps directly. Edge case of accidental tap is handled by
+          Safari's back arrow returning the driver to the listing.) */}
     </main>
   )
 }
