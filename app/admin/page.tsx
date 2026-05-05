@@ -32,6 +32,16 @@ function AdminPageContent() {
   const [exits, setExits] = useState<any[]>([])
   const [hoteliers, setHoteliers] = useState<any[]>([])
   const [hotelierCalls, setHotelierCalls] = useState<Record<string, number>>({})
+  // Per-hotel call counts attributed to the hotel's boost window. Computed
+  // client-side from call_logs.called_at vs. hotels.boost_started_at /
+  // boost_ends_at — no schema changes needed because both timestamps already
+  // exist on the hotels row when the hotelier turns boost on.
+  //   duringCurrent: calls inside the CURRENTLY LIVE boost (only meaningful
+  //                  while boost_ends_at is in the future).
+  //   lastBoost:     calls inside the MOST RECENT boost window — useful as a
+  //                  recap right after a boost ends, so admin can see what
+  //                  the campaign produced.
+  const [boostCalls, setBoostCalls] = useState<Record<string, { duringCurrent: number; lastBoost: number }>>({})
   const [form, setForm] = useState({ ...emptyHotel })
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -52,7 +62,9 @@ function AdminPageContent() {
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker'),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
-      supabase.from('call_logs').select('hotelier_id, called_at'),
+      // Pull hotel_id + called_at too so we can compute boost-window calls
+      // per hotel below. hotelier_id stays so the Hoteliers tab works.
+      supabase.from('call_logs').select('hotel_id, hotelier_id, called_at'),
     ])
     if (h) setHotels(h); if (i) setInterstates(i); if (e) setExits(e)
     if (ht) setHoteliers(ht)
@@ -67,6 +79,34 @@ function AdminPageContent() {
         }
       }
       setHotelierCalls(counts)
+
+      // Boost-attributed call counts.
+      // For each hotel that has (or had) a boost window, count call_logs
+      // rows whose called_at falls between boost_started_at and
+      // boost_ends_at. This is the Option-2 approach: zero schema changes,
+      // pure timestamp join. Caveat: if a hotelier toggles boost on/off
+      // multiple times we only see the MOST RECENT window — fine for now;
+      // a boost_periods history table is the upgrade path if/when needed.
+      const bc: Record<string, { duringCurrent: number; lastBoost: number }> = {}
+      if (h) {
+        for (const hotel of h) {
+          if (!hotel.boost_started_at || !hotel.boost_ends_at) continue
+          const start = new Date(hotel.boost_started_at).getTime()
+          const end = new Date(hotel.boost_ends_at).getTime()
+          const live = end > now.getTime()
+          let count = 0
+          for (const c of cl) {
+            if (c.hotel_id !== hotel.id) continue
+            const t = new Date(c.called_at).getTime()
+            if (t >= start && t <= end) count++
+          }
+          bc[hotel.id] = {
+            duringCurrent: live ? count : 0,
+            lastBoost: count,
+          }
+        }
+      }
+      setBoostCalls(bc)
     }
   }
 
@@ -602,6 +642,34 @@ function AdminPageContent() {
                                 }}>
                                   ★ Boosted{h.boost_price ? ` · $${h.boost_price}` : ''}
                                   {live ? ` · ${minutesLeft}m left` : ''}
+                                </span>
+                              )
+                            })()}
+                            {/* Boost-attributed call counter.
+                                Shows on any hotel that has had a boost window
+                                (currently live OR previously ran one). The
+                                count is calls received between
+                                boost_started_at and boost_ends_at.
+                                  - Live boost  → "📞 N calls during boost"
+                                  - Boost ended → "📞 N calls last boost"
+                                Hidden if there's no boost history at all. */}
+                            {boostCalls[h.id] && (() => {
+                              const live = h.boost_ends_at && new Date(h.boost_ends_at).getTime() > Date.now()
+                              const n = live ? boostCalls[h.id].duringCurrent : boostCalls[h.id].lastBoost
+                              const label = live ? 'during boost' : 'last boost'
+                              return (
+                                <span
+                                  title={live
+                                    ? 'Calls received since this boost started.'
+                                    : 'Calls received during the most recent boost campaign.'}
+                                  style={{
+                                    fontSize: '10px',
+                                    background: 'rgba(34,197,94,0.10)',
+                                    color: '#22c55e',
+                                    padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                    border: '1px solid rgba(34,197,94,0.25)',
+                                  }}>
+                                  📞 {n} call{n === 1 ? '' : 's'} {label}
                                 </span>
                               )
                             })()}
