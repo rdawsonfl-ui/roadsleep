@@ -72,7 +72,11 @@ function AdminPageContent() {
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
 
-  async function saveHotel() {
+  // saveHotel persists the form. When `alsoVerify` is true, we also stamp the
+  // record as verified + last_verified_at in the SAME write — used by the
+  // "Save & Verify" button so admin can review hotel info on a big screen,
+  // tweak fields as they go, and confirm with one click when satisfied.
+  async function saveHotel(alsoVerify: boolean = false) {
     if (!form.name || !form.exit_id) { flash('Name and exit are required'); return }
     setLoading(true)
     // Compose the legacy 'address' field from the structured pieces so any
@@ -84,7 +88,7 @@ function AdminPageContent() {
       [form.state?.trim(), form.zip?.trim()].filter(Boolean).join(' ').trim(),
     ].filter(Boolean).join(', ')
 
-    const payload = {
+    const payload: any = {
       name: form.name, phone: form.phone,
       // Both the legacy and new fields get saved.
       address: composedAddress || form.address,
@@ -98,12 +102,16 @@ function AdminPageContent() {
       featured: form.featured, photo_url: form.photo_url, exit_id: form.exit_id,
       type: form.type || 'hotel',
     }
+    if (alsoVerify) {
+      payload.verified = true
+      payload.last_verified_at = new Date().toISOString()
+    }
     if (editId) {
       await supabase.from('hotels').update(payload).eq('id', editId)
-      flash('Hotel updated ✓')
+      flash(alsoVerify ? 'Hotel updated & verified ✓' : 'Hotel updated ✓')
     } else {
       await supabase.from('hotels').insert(payload)
-      flash('Hotel added ✓')
+      flash(alsoVerify ? 'Hotel added & verified ✓' : 'Hotel added ✓')
     }
     setForm({ ...emptyHotel }); setEditId(null); setLoading(false); loadAll()
   }
@@ -241,9 +249,35 @@ function AdminPageContent() {
           <>
             {/* Add/Edit Hotel Form */}
             <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontFamily: 'Syne, sans-serif', marginBottom: '16px', color: 'var(--white)' }}>
-                {editId ? '✏️ Edit Hotel' : '+ Add Hotel'}
-              </h2>
+              {/* Header row: title + (when editing) the current verification
+                  status of THIS record so admin sees state at a glance while
+                  reviewing on laptop. The pill mirrors the row-list styling
+                  so it reads consistently across the page. */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '16px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', margin: 0 }}>
+                  {editId ? `✏️ Edit ${form.type === 'rv_park' ? 'RV Park' : 'Hotel'}` : `+ Add ${form.type === 'rv_park' ? 'RV Park' : 'Hotel'}`}
+                </h2>
+                {editId && (() => {
+                  const cur = hotels.find(h => h.id === editId)
+                  const isVerified = !!cur?.verified
+                  const lastVer = cur?.last_verified_at
+                    ? new Date(cur.last_verified_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                    : null
+                  return (
+                    <span style={{
+                      fontSize: '11px', padding: '4px 10px', borderRadius: '999px',
+                      background: isVerified ? 'rgba(34,197,94,0.10)' : 'rgba(245,166,35,0.12)',
+                      color: isVerified ? '#22c55e' : 'var(--amber)',
+                      border: `1px solid ${isVerified ? '#22c55e' : 'var(--amber)'}`,
+                      fontWeight: 600,
+                    }}>
+                      {isVerified
+                        ? `✓ Verified${lastVer ? ` · ${lastVer}` : ''}`
+                        : '⚠ Unverified · hidden from drivers'}
+                    </span>
+                  )
+                })()}
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '12px' }}>
                 <div style={{ gridColumn: 'span 2' }}>
                   <label className="dark-label">Hotel Name *</label>
@@ -355,17 +389,70 @@ function AdminPageContent() {
                 ★ Boost this listing <span style={{ color: 'var(--fog)', fontSize: '11px' }}>(top placement + pulsating price banner above Call)</span>
               </label>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={saveHotel} disabled={loading} className="btn-amber" style={{ flex: 1, padding: '12px', fontSize: '13px' }}>
-                  {loading ? 'SAVING...' : editId ? 'UPDATE HOTEL' : 'ADD HOTEL'}
-                </button>
-                {editId && (
-                  <button onClick={() => { setEditId(null); setForm({ ...emptyHotel }) }} style={{
-                    background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--mist)',
-                    padding: '12px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px',
-                  }}>Cancel</button>
-                )}
-              </div>
+              {/* Action row.
+                  Add mode: just one ADD button.
+                  Edit mode: SAVE on the left, SAVE & VERIFY on the right
+                    (or UNVERIFY if record is currently verified).
+                  Cancel chip on the far right when editing.
+                  The dual-button design lets admin tweak fields and either
+                  save-only (still working through it) or save-and-verify
+                  (done, push it live to drivers) in one click. */}
+              {(() => {
+                const cur = editId ? hotels.find(h => h.id === editId) : null
+                const isVerified = !!cur?.verified
+                return (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => saveHotel(false)}
+                      disabled={loading}
+                      className="btn-amber"
+                      style={{ flex: 1, minWidth: '140px', padding: '12px', fontSize: '13px' }}>
+                      {loading ? 'SAVING...' : editId ? '💾 SAVE CHANGES' : '+ ADD HOTEL'}
+                    </button>
+
+                    {editId && !isVerified && (
+                      <button
+                        onClick={() => saveHotel(true)}
+                        disabled={loading}
+                        style={{
+                          flex: 1, minWidth: '140px', padding: '12px', fontSize: '13px',
+                          background: '#22c55e', border: '1px solid #22c55e', color: '#0a0f0a',
+                          borderRadius: '8px', cursor: 'pointer', fontWeight: 700,
+                          letterSpacing: '0.5px',
+                        }}
+                        title="Save current edits AND mark this record verified — pushes it live to driver search.">
+                        ✓ SAVE & VERIFY
+                      </button>
+                    )}
+
+                    {editId && isVerified && (
+                      <button
+                        onClick={async () => {
+                          if (!confirm('Unverify this listing? It will be hidden from driver search until verified again.')) return
+                          await toggleVerified(editId, true)
+                          flash('Unverified — hidden from drivers')
+                        }}
+                        disabled={loading}
+                        style={{
+                          padding: '12px 16px', fontSize: '13px',
+                          background: 'rgba(239,68,68,0.10)', color: '#ef4444',
+                          border: '1px solid #ef4444', borderRadius: '8px', cursor: 'pointer',
+                          fontWeight: 600,
+                        }}
+                        title="Already verified. Click to unverify (e.g., info went stale).">
+                        ⏸ UNVERIFY
+                      </button>
+                    )}
+
+                    {editId && (
+                      <button onClick={() => { setEditId(null); setForm({ ...emptyHotel }) }} style={{
+                        background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--mist)',
+                        padding: '12px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px',
+                      }}>Cancel</button>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* CSV Import */}
