@@ -1,11 +1,15 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 import PasswordInput from '@/app/components/PasswordInput'
 
-// Password is stored in the `settings` table in Supabase and verified by the
-// server (RLS-locked, service-role-only). Browser never sees the actual value.
-// The localStorage flag below just remembers that THIS device passed the check
-// recently — clearing it forces a re-prompt.
+// Password is stored hashed (bcrypt) in the Supabase `settings` table.
+// All access is gated by SECURITY DEFINER functions verify_admin_password
+// and change_admin_password — anon callers can invoke them but cannot
+// read the underlying table or extract the hash.
+//
+// The localStorage flag below just remembers that THIS device passed the
+// check recently. Clearing it forces a re-prompt.
 const STORAGE_KEY = 'rs_admin_ok'
 
 export default function AdminGate({ children }: { children: React.ReactNode }) {
@@ -29,18 +33,16 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
     setBusy(true)
     setErr('')
     try {
-      const res = await fetch('/api/admin/verify-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
-      })
-      const data = await res.json()
-      if (data.ok) {
+      const { data, error } = await supabase.rpc('verify_admin_password', { candidate: pw })
+      if (error) {
+        setErr('Could not verify — try again')
+        setTimeout(() => setErr(''), 3000)
+      } else if (data === true) {
         localStorage.setItem(STORAGE_KEY, '1')
         setOk(true)
         setPw('')
       } else {
-        setErr(data.error || 'Wrong password')
+        setErr('Wrong password')
         setTimeout(() => setErr(''), 3000)
       }
     } catch {
@@ -129,17 +131,23 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
     if (next.length < 8) { setErr('New password must be at least 8 characters'); return }
     setBusy(true)
     try {
-      const res = await fetch('/api/admin/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current, next }),
+      const { data, error } = await supabase.rpc('change_admin_password', {
+        current_pw: current,
+        new_pw: next,
       })
-      const data = await res.json()
-      if (data.ok) {
+      if (error) {
+        setErr('Could not save — try again')
+      } else if (data === 'ok') {
         setDone(true)
         setTimeout(onClose, 2000)
+      } else if (data === 'wrong_current') {
+        setErr('Current password is incorrect')
+      } else if (data === 'too_short') {
+        setErr('New password must be at least 8 characters')
+      } else if (data === 'same_as_old') {
+        setErr('New password must be different from current')
       } else {
-        setErr(data.error || 'Could not change password')
+        setErr('Could not change password')
       }
     } catch {
       setErr('Network error — try again')
