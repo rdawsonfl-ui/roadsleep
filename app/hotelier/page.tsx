@@ -334,6 +334,9 @@ export default function HotelierPortal() {
   const [boostPriceInput, setBoostPriceInput] = useState<string>('')
   const [boostDuration, setBoostDuration] = useState<1 | 2 | 3>(1)
   const [boostBusy, setBoostBusy] = useState(false)
+  // Change-password modal — reachable from the dashboard top bar so a logged-in
+  // hotelier can rotate their password without going through the email reset flow.
+  const [showChangePw, setShowChangePw] = useState(false)
 
   // ET calendar date as YYYY-MM-DD — used for the "1x per day" rule.
   function etDateString(d: Date = new Date()): string {
@@ -581,6 +584,7 @@ export default function HotelierPortal() {
   // ── DASHBOARD ──
   return (
     <main style={{ background:'var(--night)', minHeight:'calc(100vh - 56px)', padding:'24px 20px 60px' }}>
+      {showChangePw && <HotelierChangePasswordModal onClose={() => setShowChangePw(false)} />}
       <div style={{ maxWidth:'760px', margin:'0 auto' }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'24px', flexWrap:'wrap', gap:'12px' }}>
           <div>
@@ -589,8 +593,9 @@ export default function HotelierPortal() {
             </h1>
             <p style={{ color:'var(--fog)', fontSize:'13px', marginTop:'2px' }}>{hotelier.email}</p>
           </div>
-          <div style={{ display:'flex', gap:'8px' }}>
+          <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
             <button onClick={startNew} className="btn-amber" style={{ padding:'10px 18px', fontSize:'13px' }}>+ Add Hotel</button>
+            <button onClick={() => setShowChangePw(true)} style={{ background:'var(--night2)', border:'1px solid var(--border)', color:'var(--fog)', padding:'10px 14px', borderRadius:'8px', cursor:'pointer', fontSize:'13px' }}>Change Password</button>
             <button onClick={logout} style={{ background:'var(--night2)', border:'1px solid var(--border)', color:'var(--fog)', padding:'10px 14px', borderRadius:'8px', cursor:'pointer', fontSize:'13px' }}>Log out</button>
           </div>
         </div>
@@ -833,6 +838,68 @@ function GreenBox({ msg }: { msg:string }) {
 
 function ErrBox({ msg }: { msg:string }) {
   return <div style={{ background:'rgba(255,80,80,0.1)', border:'1px solid rgba(255,80,80,0.3)', borderRadius:'8px', padding:'10px 14px', marginBottom:'16px', fontSize:'13px', color:'#ff6b6b' }}>{msg}</div>
+}
+
+// Change-password modal for logged-in hoteliers. Uses Supabase Auth's built-in
+// updateUser({ password }) — same primitive the email-reset flow uses, just
+// reachable directly from the dashboard for someone already signed in.
+function HotelierChangePasswordModal({ onClose }: { onClose: () => void }) {
+  const [next, setNext] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (busy) return
+    setErr('')
+    if (next !== confirm) { setErr('Passwords do not match'); return }
+    if (next.length < 8) { setErr('Password must be at least 8 characters'); return }
+    setBusy(true)
+    const { error } = await supabase.auth.updateUser({ password: next })
+    setBusy(false)
+    if (error) { setErr(error.message); return }
+    setDone(true)
+    setTimeout(onClose, 2000)
+  }
+
+  return (
+    <div onClick={onClose} style={{
+      position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:100,
+      display:'flex', alignItems:'center', justifyContent:'center', padding:'20px',
+    }}>
+      <div onClick={(e)=>e.stopPropagation()} style={{
+        background:'var(--night2)', border:'1px solid var(--border)', borderRadius:'16px',
+        padding:'28px', width:'100%', maxWidth:'380px',
+      }}>
+        <h2 style={{ fontSize:'20px', fontFamily:'Syne, sans-serif', color:'var(--white)', marginBottom:'16px' }}>
+          Change <span style={{ color:'var(--amber)' }}>Password</span>
+        </h2>
+
+        {done ? (
+          <p style={{ color:'var(--green)', fontSize:'14px' }}>✓ Password updated.</p>
+        ) : (
+          <form onSubmit={submit}>
+            <Field label="New password" value={next} onChange={setNext} placeholder="at least 8 characters" type="password" />
+            <Field label="Confirm new password" value={confirm} onChange={setConfirm} placeholder="same again" type="password" />
+
+            {err && <p style={{ color:'#ff6b6b', fontSize:'12px', marginBottom:'10px' }}>⚠ {err}</p>}
+
+            <div style={{ display:'flex', gap:'8px', marginTop:'8px' }}>
+              <button type="button" onClick={onClose} style={{
+                flex:1, background:'var(--night3)', border:'1px solid var(--border)', color:'var(--fog)',
+                padding:'10px', borderRadius:'8px', cursor:'pointer', fontSize:'13px',
+              }}>Cancel</button>
+              <button type="submit" disabled={busy} className="btn-amber" style={{ flex:1, padding:'10px', fontSize:'13px', opacity: busy ? 0.6 : 1 }}>
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export const dynamic = 'force-dynamic'
