@@ -63,7 +63,7 @@ function AdminPageContent() {
 
   async function loadAll() {
     const [{ data: h }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
-      supabase.from('hotels').select('*, exits(*, interstates(*))').order('created_at', { ascending: false }),
+      supabase.from('hotels').select('*, exits(*, interstates(*))'),
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker'),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
@@ -71,7 +71,23 @@ function AdminPageContent() {
       // per hotel below. hotelier_id stays so the Hoteliers tab works.
       supabase.from('call_logs').select('hotel_id, hotelier_id, called_at'),
     ])
-    if (h) setHotels(h); if (i) setInterstates(i); if (e) setExits(e)
+    if (h) {
+      // Sort geographically: interstate name → state → mile marker (ascending)
+      // This way the admin list reads like driving the corridor north-to-south.
+      const sorted = [...h].sort((a, b) => {
+        const intA = a.exits?.interstates?.name || 'zzz'
+        const intB = b.exits?.interstates?.name || 'zzz'
+        if (intA !== intB) return intA.localeCompare(intB)
+        const stA = a.exits?.state || a.state || 'ZZ'
+        const stB = b.exits?.state || b.state || 'ZZ'
+        if (stA !== stB) return stA.localeCompare(stB)
+        const mmA = parseFloat(a.exits?.mile_marker ?? '99999')
+        const mmB = parseFloat(b.exits?.mile_marker ?? '99999')
+        return mmA - mmB
+      })
+      setHotels(sorted)
+    }
+    if (i) setInterstates(i); if (e) setExits(e)
     if (ht) setHoteliers(ht)
     if (cl) {
       const now = new Date()
