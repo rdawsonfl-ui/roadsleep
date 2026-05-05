@@ -42,6 +42,11 @@ function AdminPageContent() {
   //                  recap right after a boost ends, so admin can see what
   //                  the campaign produced.
   const [boostCalls, setBoostCalls] = useState<Record<string, { duringCurrent: number; lastBoost: number }>>({})
+  // Per-hotel ALL-TIME total call counts, regardless of boost status or
+  // whether the hotel has a hotelier account. Used so admin can see at a
+  // glance how much call volume each property is pulling from the app.
+  // Pairs with boostCalls so admin can compare organic vs boost-attributed.
+  const [hotelCallTotals, setHotelCallTotals] = useState<Record<string, number>>({})
   const [form, setForm] = useState({ ...emptyHotel })
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -88,6 +93,12 @@ function AdminPageContent() {
       // multiple times we only see the MOST RECENT window — fine for now;
       // a boost_periods history table is the upgrade path if/when needed.
       const bc: Record<string, { duringCurrent: number; lastBoost: number }> = {}
+      // All-time totals — bumped once per call_log row regardless of boost.
+      const totals: Record<string, number> = {}
+      for (const c of cl) {
+        if (c.hotel_id) totals[c.hotel_id] = (totals[c.hotel_id] || 0) + 1
+      }
+      setHotelCallTotals(totals)
       if (h) {
         for (const hotel of h) {
           if (!hotel.boost_started_at || !hotel.boost_ends_at) continue
@@ -268,7 +279,36 @@ function AdminPageContent() {
         <h1 style={{ fontSize: '28px', fontFamily: 'Syne, sans-serif', marginBottom: '4px', color: 'var(--white)' }}>
           Admin <span style={{ color: 'var(--amber)' }}>Panel</span>
         </h1>
-        <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '24px' }}>Manage hotels, interstates, and exits</p>
+        <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '16px' }}>Manage hotels, interstates, and exits</p>
+
+        {/* App-wide call totals — sums of every call_log row, then the
+            subset attributed to a boost window. Sits up top so admin sees
+            global volume the moment the page loads, before drilling into
+            any specific hotel. The third number (organic) is a derived
+            convenience: total minus boost. */}
+        {(() => {
+          const totalAll = Object.values(hotelCallTotals).reduce((s, n) => s + n, 0)
+          const totalBoost = Object.values(boostCalls).reduce((s, b) => s + b.lastBoost, 0)
+          const organic = Math.max(0, totalAll - totalBoost)
+          const stat = (label: string, val: number, color: string, hint: string) => (
+            <div style={{
+              flex: 1, minWidth: '140px',
+              background: 'var(--night2)', border: '1px solid var(--border)', borderRadius: '12px',
+              padding: '12px 16px',
+            }}>
+              <div style={{ fontSize: '10px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: '4px' }}>{label}</div>
+              <div style={{ fontSize: '22px', fontWeight: 700, color, fontFamily: 'Syne, sans-serif' }}>{val.toLocaleString()}</div>
+              <div style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '2px' }}>{hint}</div>
+            </div>
+          )
+          return (
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
+              {stat('Total Calls', totalAll, '#63b3ed', 'all-time, every hotel')}
+              {stat('Boost Calls', totalBoost, 'var(--amber)', 'within boost windows')}
+              {stat('Organic Calls', organic, '#22c55e', 'outside boost windows')}
+            </div>
+          )
+        })()}
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
@@ -628,6 +668,28 @@ function AdminPageContent() {
                                 padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
                               }}>⚠ Unverified · hidden from drivers</span>
                             )}
+                            {/* All-time total calls received from anywhere in
+                                the app (home, search, hotel detail). Always
+                                shown — even at zero — so admin can compare
+                                across hotels and spot dead inventory. Visually
+                                distinct (mist/blue tint) from the green boost
+                                pill so the two never blur together. */}
+                            {(() => {
+                              const total = hotelCallTotals[h.id] || 0
+                              return (
+                                <span
+                                  title="Total calls received from drivers across the entire app — boosted and organic combined."
+                                  style={{
+                                    fontSize: '10px',
+                                    background: total > 0 ? 'rgba(99,179,237,0.10)' : 'rgba(255,255,255,0.04)',
+                                    color: total > 0 ? '#63b3ed' : 'var(--fog)',
+                                    padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                    border: `1px solid ${total > 0 ? 'rgba(99,179,237,0.25)' : 'var(--border)'}`,
+                                  }}>
+                                  📞 {total} total call{total === 1 ? '' : 's'}
+                                </span>
+                              )
+                            })()}
                             {h.featured && (() => {
                               const live = h.boost_ends_at && new Date(h.boost_ends_at).getTime() > Date.now()
                               const minutesLeft = h.boost_ends_at
@@ -650,13 +712,16 @@ function AdminPageContent() {
                                 (currently live OR previously ran one). The
                                 count is calls received between
                                 boost_started_at and boost_ends_at.
-                                  - Live boost  → "📞 N calls during boost"
-                                  - Boost ended → "📞 N calls last boost"
-                                Hidden if there's no boost history at all. */}
+                                  - Live boost  → "⭐ N boost calls (live)"
+                                  - Boost ended → "⭐ N boost calls (last)"
+                                Hidden if there's no boost history at all.
+                                Uses ⭐ + amber so it visually pairs with the
+                                ★ Boosted pill, and never blurs together with
+                                the blue 📞 total-calls pill above. */}
                             {boostCalls[h.id] && (() => {
                               const live = h.boost_ends_at && new Date(h.boost_ends_at).getTime() > Date.now()
                               const n = live ? boostCalls[h.id].duringCurrent : boostCalls[h.id].lastBoost
-                              const label = live ? 'during boost' : 'last boost'
+                              const label = live ? 'live' : 'last'
                               return (
                                 <span
                                   title={live
@@ -664,12 +729,12 @@ function AdminPageContent() {
                                     : 'Calls received during the most recent boost campaign.'}
                                   style={{
                                     fontSize: '10px',
-                                    background: 'rgba(34,197,94,0.10)',
-                                    color: '#22c55e',
+                                    background: 'rgba(245,166,35,0.10)',
+                                    color: 'var(--amber)',
                                     padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
-                                    border: '1px solid rgba(34,197,94,0.25)',
+                                    border: '1px solid rgba(245,166,35,0.30)',
                                   }}>
-                                  📞 {n} call{n === 1 ? '' : 's'} {label}
+                                  ⭐ {n} boost call{n === 1 ? '' : 's'} ({label})
                                 </span>
                               )
                             })()}
