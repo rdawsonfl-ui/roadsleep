@@ -113,7 +113,6 @@ function SearchResults() {
         .from('hotels')
         .select('*, exits(*, interstates(*))')
         .in('exit_id', exitIds)
-        .eq('verified', true)
 
       const enriched = (hotelData || []).map(h => {
         const exit = aheadExits.find(e => e.id === h.exit_id)

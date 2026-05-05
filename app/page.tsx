@@ -136,7 +136,6 @@ export default function HomePage() {
       const { data } = await supabase
         .from('hotels')
         .select('id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
-        .eq('verified', true)
         .limit(200)
       if (data) {
         const withNullDist: Hotel[] = (data as any[]).map((h) => ({ ...h, distance: null }))
