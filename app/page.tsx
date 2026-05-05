@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import SiteFooter from '@/app/components/SiteFooter'
 
 type Hotel = {
   id: string
@@ -511,6 +512,7 @@ export default function HomePage() {
       {/* (Directions confirmation modal removed per spec — Go button now
           opens Maps directly. Edge case of accidental tap is handled by
           Safari's back arrow returning the driver to the listing.) */}
+      <SiteFooter />
     </main>
   )
 }
