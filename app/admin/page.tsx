@@ -91,9 +91,15 @@ function AdminPageContent() {
 
   async function loadAll() {
     const [{ data: h }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
-      supabase.from('hotels').select('*, exits(*, interstates(*))'),
+      // Default Supabase PostgREST limit is 1000 rows. With 1,186+ listings
+      // (and growing), the admin was silently dropping the last ~186 — the
+      // most recently inserted, which meant I-80 hotels disappeared from
+      // the admin even though they're in the DB. .range(0, 4999) lifts the
+      // cap to 5000 — plenty of headroom for the foreseeable future without
+      // having to add real pagination yet.
+      supabase.from('hotels').select('*, exits(*, interstates(*))').range(0, 4999),
       supabase.from('interstates').select('*').order('name'),
-      supabase.from('exits').select('*, interstates(name)').order('mile_marker'),
+      supabase.from('exits').select('*, interstates(name)').order('mile_marker').range(0, 4999),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
       // Pull hotel_id + called_at too so we can compute boost-window calls
       // per hotel below. hotelier_id stays so the Hoteliers tab works.
