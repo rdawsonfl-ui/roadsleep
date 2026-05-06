@@ -104,10 +104,16 @@ export default function HomePage() {
   // const) because the Closest button toggles it, and it's a low-risk
   // anchor if we want to bring filters back later.
   const [distance, setDistance] = useState<'10' | '30' | '60' | '120' | 'closest'>('closest')
-  // Max-distance slider state — caps which hotels appear by miles from the
-  // driver. 1000 = effectively 'show all' (default). Drivers planning ahead
-  // narrow it; closer-range drivers leave it wide. Snaps to 25-mile steps.
-  const [maxDistance, setMaxDistance] = useState<number>(1000)
+  // Distance slider state — represents the CENTER of where the driver wants
+  // to stop, not a max cap. e.g. value=200 with WINDOW=50 shows hotels in
+  // the 150-250 mi band. Default 1000 = max value = 'Anywhere' (no filter).
+  // Renamed from maxDistance to make the semantics clear in code.
+  const [targetDistance, setTargetDistance] = useState<number>(1000)
+  // ±50 mi window around the target. Wide enough that drivers see real
+  // options at every slider position; narrow enough that the band feels
+  // intentional. Drivers planning a 4-hr stop care about a stretch, not
+  // a single milepost.
+  const DISTANCE_WINDOW = 50
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
@@ -192,12 +198,19 @@ export default function HomePage() {
     if (cap !== null) {
       filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= cap)
     }
-    // Slider cap. 1000+ effectively means 'no cap' so we skip filtering at
-    // the max value to keep the listing complete. Hotels missing distance
-    // data (no lat/lng AND no exit) get hidden when the slider is engaged
-    // — better than showing them at an unknown position in a narrowed view.
-    if (maxDistance < 1000) {
-      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= maxDistance)
+    // Slider window. 1000+ effectively means 'no filter' (Anywhere) so we
+    // skip when the driver leaves it at max. Otherwise we show hotels in
+    // a ±DISTANCE_WINDOW band around the target — sliding to 200 surfaces
+    // hotels around the 200-mile mark instead of capping at 200. This is
+    // what a driver planning a stop in 4 hours actually wants.
+    if (targetDistance < 1000) {
+      const lo = Math.max(0, targetDistance - DISTANCE_WINDOW)
+      const hi = targetDistance + DISTANCE_WINDOW
+      filtered = filtered.filter((h) => {
+        if (h.distance === null) return false
+        const d = h.distance as number
+        return d >= lo && d <= hi
+      })
     }
   }
 
@@ -323,11 +336,13 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Distance slider — sits under the green CLOSEST button. Lets a
-            driver narrow how far ahead they care about. Default 1000 mi
-            (effectively show-all). Snaps to 25-mi increments so the thumb
-            doesn't feel jumpy. Only useful when GPS is available — when
-            denied, distances are unknown so the slider would do nothing. */}
+        {/* Distance slider — sits under the green CLOSEST button. Center-
+            point semantics: slider value = where the driver wants to stop,
+            and we show a ±DISTANCE_WINDOW band around it. Sliding to 200
+            jumps the list to hotels around the 200-mi mark, instead of
+            capping a closest-first list. Drivers planning a 4-hour stop
+            actually want this band, not 'all hotels up to 200 mi'.
+            Hidden when GPS is denied (distances unknown without GPS). */}
         {userLoc && (
           <div style={{ marginBottom: '16px', padding: '0 4px' }}>
             <div style={{
@@ -339,9 +354,11 @@ export default function HomePage() {
               color: 'var(--fog)',
               letterSpacing: '0.3px',
             }}>
-              <span>Within</span>
+              <span>Stops near</span>
               <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '14px' }}>
-                {maxDistance >= 1000 ? 'Any distance' : `${maxDistance} mi ahead`}
+                {targetDistance >= 1000
+                  ? 'Anywhere'
+                  : `${targetDistance} mi ahead`}
               </span>
             </div>
             <input
@@ -349,9 +366,9 @@ export default function HomePage() {
               min={25}
               max={1000}
               step={25}
-              value={maxDistance}
-              onChange={e => setMaxDistance(parseInt(e.target.value))}
-              aria-label="Maximum distance"
+              value={targetDistance}
+              onChange={e => setTargetDistance(parseInt(e.target.value))}
+              aria-label="Target distance"
               style={{
                 width: '100%',
                 accentColor: 'var(--amber)',
