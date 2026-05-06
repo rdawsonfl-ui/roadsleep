@@ -354,7 +354,7 @@ export default function HomePage() {
               color: 'var(--fog)',
               letterSpacing: '0.3px',
             }}>
-              <span>Stops near</span>
+              <span>Plan Ahead Distance</span>
               <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '14px' }}>
                 {targetDistance >= 1000
                   ? 'Anywhere'
