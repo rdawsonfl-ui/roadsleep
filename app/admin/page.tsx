@@ -59,7 +59,35 @@ function AdminPageContent() {
   // of the verification work happens.
   const [adminCategory, setAdminCategory] = useState<'hotel' | 'rv_park'>('hotel')
 
+  // Testing-mode toggle. When ON, drivers see ALL listings (verified +
+  // unverified). When OFF (production), only verified=true show. The green
+  // '✔ Front desk confirmed' badge stays bound to verified=true regardless,
+  // so the badge keeps its meaning even while testing.
+  const [testingMode, setTestingMode] = useState<boolean>(false)
+  const [testingModeLoaded, setTestingModeLoaded] = useState<boolean>(false)
+
   useEffect(() => { loadAll() }, [])
+
+  // Load the testing-mode setting on mount.
+  useEffect(() => {
+    let cancelled = false
+    supabase.from('settings').select('value').eq('key', 'show_unverified_to_drivers').single()
+      .then(({ data }) => {
+        if (cancelled) return
+        setTestingMode(data?.value === 'true')
+        setTestingModeLoaded(true)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // Flip the toggle and persist immediately. Optimistic UI — flip the local
+  // state right away, save in background. If save fails we'd want to revert,
+  // but for an admin-only page the failure mode is acceptable.
+  async function toggleTestingMode(next: boolean) {
+    setTestingMode(next)
+    await supabase.from('settings')
+      .upsert({ key: 'show_unverified_to_drivers', value: next ? 'true' : 'false' }, { onConflict: 'key' })
+  }
 
   async function loadAll() {
     const [{ data: h }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
@@ -325,6 +353,55 @@ function AdminPageContent() {
             </div>
           )
         })()}
+
+        {/* Testing-mode toggle. When ON, drivers see all listings (verified
+            + unverified). Useful while inventory is built but verification
+            grind hasn't happened yet. The verified badge still only shows
+            on truly verified listings — toggle just controls visibility. */}
+        {testingModeLoaded && (
+          <div style={{
+            background: testingMode ? 'rgba(245, 166, 35, 0.10)' : 'transparent',
+            border: '1px solid ' + (testingMode ? 'var(--amber)' : 'var(--border)'),
+            borderRadius: '10px',
+            padding: '12px 16px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: 1, minWidth: '240px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: testingMode ? 'var(--amber)' : 'var(--white)', marginBottom: '4px' }}>
+                {testingMode ? '🧪 TESTING MODE — all listings visible' : '🔒 Production mode — verified-only'}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.5 }}>
+                {testingMode
+                  ? 'Drivers see all 1,186 listings (verified + unverified). The green ✔ badge still only shows on verified.'
+                  : 'Drivers see only listings flipped to verified=true. Verified badge appears next to all of them.'}
+              </div>
+            </div>
+            <button
+              onClick={() => toggleTestingMode(!testingMode)}
+              style={{
+                background: testingMode ? 'var(--amber)' : 'transparent',
+                color: testingMode ? '#000' : 'var(--fog)',
+                border: '1px solid ' + (testingMode ? 'var(--amber)' : 'var(--border)'),
+                borderRadius: '8px',
+                padding: '10px 16px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'DM Sans, sans-serif',
+                whiteSpace: 'nowrap',
+                letterSpacing: '0.5px',
+                textTransform: 'uppercase',
+              }}
+            >
+              {testingMode ? 'Switch to Production' : 'Enable Testing Mode'}
+            </button>
+          </div>
+        )}
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>

@@ -145,20 +145,32 @@ export default function HomePage() {
       // Lazy boost-expiry: any boost whose end-time has passed flips back to
       // featured=false before we read hotels. Idempotent, no cron needed.
       try { await Promise.resolve(supabase.rpc('expire_finished_boosts')) } catch { /* noop */ }
-      // Filter by category SERVER-SIDE. Previously we fetched everything
-      // and filtered in JS, which combined with a tight .limit(200) meant
-      // many hotels never reached the page (200 rows was first-200-by-id,
-      // not first-200-hotels). Now Supabase filters first, then we cap at
-      // 1000 (its hard ceiling) which is plenty for any one category.
-      // We also defensively skip rows missing both name and an exit, which
-      // are leftover artifacts from interrupted signup flows.
-      const { data } = await supabase
+      // Read the testing-mode toggle from settings. When true, drivers see
+      // EVERY listing including unverified ones. When false (production
+      // default), only verified=true listings show up. Either way, the green
+      // '✔ Front desk confirmed' badge stays bound to verified=true so it
+      // keeps its meaning — no fake badges in testing mode.
+      let showAll = false
+      try {
+        const { data: s } = await supabase
+          .from('settings').select('value').eq('key', 'show_unverified_to_drivers').single()
+        showAll = s?.value === 'true'
+      } catch { /* default false */ }
+
+      // Build the query. Server-side filter on type + (optionally) verified.
+      // Defensive: skip rows with empty/null name (artifacts of interrupted
+      // hotelier signup attempts).
+      let q = supabase
         .from('hotels')
         .select('id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
         .eq('type', category)
         .not('name', 'is', null)
         .neq('name', '')
         .limit(1000)
+      if (!showAll) {
+        q = q.eq('verified', true)
+      }
+      const { data } = await q
       if (data) {
         const withNullDist: Hotel[] = (data as any[]).map((h) => ({ ...h, distance: null }))
         setHotels(withNullDist)
