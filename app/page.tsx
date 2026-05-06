@@ -104,6 +104,10 @@ export default function HomePage() {
   // const) because the Closest button toggles it, and it's a low-risk
   // anchor if we want to bring filters back later.
   const [distance, setDistance] = useState<'10' | '30' | '60' | '120' | 'closest'>('closest')
+  // Max-distance slider state — caps which hotels appear by miles from the
+  // driver. 1000 = effectively 'show all' (default). Drivers planning ahead
+  // narrow it; closer-range drivers leave it wide. Snaps to 25-mile steps.
+  const [maxDistance, setMaxDistance] = useState<number>(1000)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
@@ -187,6 +191,13 @@ export default function HomePage() {
               : null
     if (cap !== null) {
       filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= cap)
+    }
+    // Slider cap. 1000+ effectively means 'no cap' so we skip filtering at
+    // the max value to keep the listing complete. Hotels missing distance
+    // data (no lat/lng AND no exit) get hidden when the slider is engaged
+    // — better than showing them at an unknown position in a narrowed view.
+    if (maxDistance < 1000) {
+      filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= maxDistance)
     }
   }
 
@@ -311,6 +322,55 @@ export default function HomePage() {
             📍 Closest
           </button>
         </div>
+
+        {/* Distance slider — sits under the green CLOSEST button. Lets a
+            driver narrow how far ahead they care about. Default 1000 mi
+            (effectively show-all). Snaps to 25-mi increments so the thumb
+            doesn't feel jumpy. Only useful when GPS is available — when
+            denied, distances are unknown so the slider would do nothing. */}
+        {userLoc && (
+          <div style={{ marginBottom: '16px', padding: '0 4px' }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'baseline',
+              marginBottom: '6px',
+              fontSize: '12px',
+              color: 'var(--fog)',
+              letterSpacing: '0.3px',
+            }}>
+              <span>Within</span>
+              <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '14px' }}>
+                {maxDistance >= 1000 ? 'Any distance' : `${maxDistance} mi ahead`}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={25}
+              max={1000}
+              step={25}
+              value={maxDistance}
+              onChange={e => setMaxDistance(parseInt(e.target.value))}
+              aria-label="Maximum distance"
+              style={{
+                width: '100%',
+                accentColor: 'var(--amber)',
+                cursor: 'pointer',
+              }}
+            />
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '10px',
+              color: 'var(--fog)',
+              opacity: 0.6,
+              marginTop: '2px',
+            }}>
+              <span>25 mi</span>
+              <span>1000+</span>
+            </div>
+          </div>
+        )}
 
         {/* (More Filters dropdown was removed — page now defaults to Closest
             with no narrowing options. The Closest button above is the only
