@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import PasswordInput from '@/app/components/PasswordInput'
+import SiteFooter from '@/app/components/SiteFooter'
 
 type Hotelier = { id: string; email: string; name: string; business_phone: string }
 type Hotel = {
@@ -427,6 +428,7 @@ export default function HotelierPortal() {
 
   // ── AUTH ──
   if (!hotelier) return (
+    <>
     <main style={{ background:'var(--night)', minHeight:'calc(100vh - 56px)', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px 20px' }}>
       <div style={{ width:'100%', maxWidth:'420px' }}>
         <div style={{ textAlign:'center', marginBottom:'32px' }}>
@@ -502,10 +504,13 @@ export default function HotelierPortal() {
         <p style={{ textAlign:'center', marginTop:'16px', fontSize:'11px', color:'var(--fog)', lineHeight:1.5 }}>Free basic listing. Drivers call you directly. Zero commissions.</p>
       </div>
     </main>
+    <SiteFooter />
+    </>
   )
 
   // ── HOTEL FORM ──
   if (view==='edit' || view==='new') return (
+    <>
     <main style={{ background:'var(--night)', minHeight:'calc(100vh - 56px)', padding:'24px 20px 60px' }}>
       <div style={{ maxWidth:'600px', margin:'0 auto' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'24px' }}>
@@ -579,10 +584,13 @@ export default function HotelierPortal() {
         </form>
       </div>
     </main>
+    <SiteFooter />
+    </>
   )
 
   // ── DASHBOARD ──
   return (
+    <>
     <main style={{ background:'var(--night)', minHeight:'calc(100vh - 56px)', padding:'24px 20px 60px' }}>
       {showChangePw && <HotelierChangePasswordModal onClose={() => setShowChangePw(false)} />}
       <div style={{ maxWidth:'760px', margin:'0 auto' }}>
@@ -796,6 +804,8 @@ export default function HotelierPortal() {
         )}
       </div>
     </main>
+    <SiteFooter />
+    </>
   )
 }
 
