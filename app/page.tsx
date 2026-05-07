@@ -106,9 +106,10 @@ export default function HomePage() {
   const [distance, setDistance] = useState<'10' | '30' | '60' | '120' | 'closest'>('closest')
   // Distance slider state — represents the CENTER of where the driver wants
   // to stop, not a max cap. e.g. value=200 with WINDOW=50 shows hotels in
-  // the 150-250 mi band. Default 1000 = max value = 'Anywhere' (no filter).
-  // Renamed from maxDistance to make the semantics clear in code.
-  const [targetDistance, setTargetDistance] = useState<number>(1000)
+  // the 150-250 mi band. Default 100 = thumb near left = 'I want to stop
+  // soon' which matches the most common driver intent (tired, near a stop).
+  // Driver who's planning further ahead slides right.
+  const [targetDistance, setTargetDistance] = useState<number>(100)
   // ±50 mi window around the target. Wide enough that drivers see real
   // options at every slider position; narrow enough that the band feels
   // intentional. Drivers planning a 4-hr stop care about a stretch, not
@@ -434,7 +435,7 @@ export default function HomePage() {
                 }}
                 style={{
                   background: active ? 'var(--amber)' : 'rgba(255,255,255,0.04)',
-                  color:      active ? '#000'        : 'var(--mist)',
+                  color:      active ? '#ffffff'     : 'var(--mist)',
                   border:     '1px solid ' + (active ? 'var(--amber)' : 'rgba(255,255,255,0.25)'),
                   borderRadius: '999px',
                   padding: '7px 16px',
