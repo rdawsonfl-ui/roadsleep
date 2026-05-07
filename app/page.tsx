@@ -516,7 +516,7 @@ export default function HomePage() {
               letterSpacing: '0.3px',
             }}>
               <span>Plan Ahead Distance</span>
-              <span style={{ color: 'var(--amber)', fontWeight: 700, fontSize: '14px' }}>
+              <span style={{ color: '#FF6A00', fontWeight: 700, fontSize: '14px' }}>
                 {targetDistance >= 1000
                   ? 'Anywhere'
                   : `${targetDistance} mi ahead`}
@@ -532,7 +532,7 @@ export default function HomePage() {
               aria-label="Target distance"
               style={{
                 width: '100%',
-                accentColor: 'var(--amber)',
+                accentColor: '#FF6A00',
                 cursor: 'pointer',
               }}
             />
