@@ -436,13 +436,14 @@ export default function HomePage() {
                   background: active ? 'var(--amber)' : 'transparent',
                   color:      active ? '#000'        : 'var(--mist)',
                   border:     '1px solid ' + (active ? 'var(--amber)' : 'var(--border)'),
-                  borderRadius: '8px',
-                  padding: '6px 12px',
+                  borderRadius: '999px',
+                  padding: '7px 16px',
                   fontSize: '13px',
-                  fontWeight: active ? 700 : 500,
+                  fontWeight: active ? 700 : 600,
                   cursor: 'pointer',
                   fontFamily: 'DM Sans, sans-serif',
-                  letterSpacing: '0.3px',
+                  letterSpacing: '0.5px',
+                  minWidth: '58px',
                 }}
               >
                 {iname}
