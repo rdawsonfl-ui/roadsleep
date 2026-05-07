@@ -433,9 +433,9 @@ export default function HomePage() {
                   }
                 }}
                 style={{
-                  background: active ? 'var(--amber)' : 'transparent',
+                  background: active ? 'var(--amber)' : 'rgba(255,255,255,0.04)',
                   color:      active ? '#000'        : 'var(--mist)',
-                  border:     '1px solid ' + (active ? 'var(--amber)' : 'var(--border)'),
+                  border:     '1px solid ' + (active ? 'var(--amber)' : 'rgba(255,255,255,0.25)'),
                   borderRadius: '999px',
                   padding: '7px 16px',
                   fontSize: '13px',
