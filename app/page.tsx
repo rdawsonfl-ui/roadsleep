@@ -114,6 +114,29 @@ export default function HomePage() {
   // intentional. Drivers planning a 4-hr stop care about a stretch, not
   // a single milepost.
   const DISTANCE_WINDOW = 50
+
+  // Interstate filter — when set, only listings on this interstate show.
+  // Default null = no filter (current behavior, all corridors mixed).
+  // Driver picks one to scope their search to a specific corridor.
+  const [selectedInterstate, setSelectedInterstate] = useState<string | null>(null)
+  // Direction filter — only meaningful after an interstate is selected.
+  // 'N'/'S' for north-south interstates, 'E'/'W' for east-west. We use
+  // GPS lat (for NS) or lng (for EW) to figure out which exits are
+  // 'ahead' of the driver and hide the rest. Null = both directions.
+  const [selectedDirection, setSelectedDirection] = useState<'N'|'S'|'E'|'W'|null>(null)
+
+  // Orientation map for our 6 corridors. Determines whether the direction
+  // row shows NB/SB or EB/WB buttons. North-south = compares lat to
+  // driver's lat. East-west = compares lng to driver's lng.
+  const INTERSTATE_AXIS: Record<string, 'NS' | 'EW'> = {
+    'I-10': 'EW',
+    'I-40': 'EW',
+    'I-80': 'EW',
+    'I-75': 'NS',
+    'I-87': 'NS',
+    'I-95': 'NS',
+  }
+  const INTERSTATES = ['I-10', 'I-40', 'I-75', 'I-80', 'I-87', 'I-95']
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
@@ -198,6 +221,41 @@ export default function HomePage() {
   // 'hotel' (DB default) so legacy rows aren't accidentally hidden when the
   // driver picks Hotels.
   filtered = filtered.filter((h) => (h.type || 'hotel') === category)
+
+  // Interstate filter — when the driver picks one, drop everything not on
+  // it. A listing's interstate comes from its exit (.exits.interstates.name)
+  // for hotels with an exit_id, OR from .near_interstate.name for RV parks
+  // that use the off-route data model. Either match counts.
+  if (selectedInterstate) {
+    filtered = filtered.filter((h) => {
+      const viaExit = h.exits?.interstates?.name
+      const viaNear = h.near_interstate?.name
+      return viaExit === selectedInterstate || viaNear === selectedInterstate
+    })
+  }
+
+  // Direction filter — only meaningful when GPS is available AND an
+  // interstate is selected. NS interstate uses lat (Northbound = exit
+  // lat > driver lat), EW uses lng (Eastbound = exit lng > driver lng).
+  // Listings without coordinates are dropped when the filter is engaged
+  // — better than guessing where they sit relative to the driver.
+  if (selectedInterstate && selectedDirection && userLoc) {
+    const axis = INTERSTATE_AXIS[selectedInterstate]
+    filtered = filtered.filter((h) => {
+      const lat = h.latitude ?? h.exits?.lat
+      const lng = h.longitude ?? h.exits?.lng
+      if (lat == null || lng == null) return false
+      if (axis === 'NS') {
+        return selectedDirection === 'N'
+          ? Number(lat) >= userLoc.lat   // ahead going north
+          : Number(lat) <= userLoc.lat   // ahead going south
+      } else {
+        return selectedDirection === 'E'
+          ? Number(lng) >= userLoc.lng   // ahead going east
+          : Number(lng) <= userLoc.lng   // ahead going west
+      }
+    })
+  }
 
   if (userLoc) {
     // Numeric presets (10/30/60/120) cap to that many miles. 'closest'
@@ -347,6 +405,95 @@ export default function HomePage() {
             📍 Closest
           </button>
         </div>
+
+        {/* Interstate filter row. Single-select. Tapping the same one
+            again deselects (and clears direction). All buttons same
+            style — small outlined pills. Selected one fills with amber.
+            Sits above the direction row + slider so the flow reads
+            top-down: pick route → pick direction → pick distance. */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '6px',
+          marginBottom: selectedInterstate ? '8px' : '16px',
+          justifyContent: 'center',
+        }}>
+          {INTERSTATES.map(iname => {
+            const active = selectedInterstate === iname
+            return (
+              <button
+                key={iname}
+                onClick={() => {
+                  if (active) {
+                    setSelectedInterstate(null)
+                    setSelectedDirection(null)
+                  } else {
+                    setSelectedInterstate(iname)
+                    setSelectedDirection(null)  // reset direction on switch
+                  }
+                }}
+                style={{
+                  background: active ? 'var(--amber)' : 'transparent',
+                  color:      active ? '#000'        : 'var(--mist)',
+                  border:     '1px solid ' + (active ? 'var(--amber)' : 'var(--border)'),
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  fontSize: '13px',
+                  fontWeight: active ? 700 : 500,
+                  cursor: 'pointer',
+                  fontFamily: 'DM Sans, sans-serif',
+                  letterSpacing: '0.3px',
+                }}
+              >
+                {iname}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Direction row — only renders when an interstate is selected.
+            Shows NB/SB for north-south interstates (I-75, I-87, I-95)
+            or EB/WB for east-west (I-10, I-40, I-80). Tapping the same
+            again deselects (= both directions). Hidden if GPS isn't
+            granted — direction filter needs the driver's coordinates
+            to know which exits are 'ahead'. */}
+        {selectedInterstate && userLoc && (
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '16px',
+            justifyContent: 'center',
+          }}>
+            {(INTERSTATE_AXIS[selectedInterstate] === 'NS'
+              ? [{ key: 'N' as const, label: 'Northbound' }, { key: 'S' as const, label: 'Southbound' }]
+              : [{ key: 'E' as const, label: 'Eastbound'  }, { key: 'W' as const, label: 'Westbound'  }]
+            ).map(dir => {
+              const active = selectedDirection === dir.key
+              return (
+                <button
+                  key={dir.key}
+                  onClick={() => setSelectedDirection(active ? null : dir.key)}
+                  style={{
+                    flex: 1,
+                    maxWidth: '180px',
+                    background: active ? '#22c55e' : 'transparent',
+                    color:      active ? '#fff'    : '#22c55e',
+                    border:     '1px solid #22c55e',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    fontFamily: 'DM Sans, sans-serif',
+                    letterSpacing: '0.3px',
+                  }}
+                >
+                  {dir.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* Distance slider — sits under the green CLOSEST button. Center-
             point semantics: slider value = where the driver wants to stop,
