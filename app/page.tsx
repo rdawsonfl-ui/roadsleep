@@ -436,40 +436,10 @@ export default function HomePage() {
           })}
         </div>
 
-        {/* Closest button — small, centered, sits between the big category
-            toggle and the More Filters dropdown. Filled when active (default
-            state), outlined when user has narrowed to a specific distance.
-            Tapping it always resets distance to 'closest'. Width is roughly
-            half the category buttons, lined up under them.
-            When GPS is denied we still show this button (since 'closest' is
-            still the default sort) but we hint that the sort is by mile
-            marker rather than real distance — honest with the driver. */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
-          <button
-            onClick={() => setDistance('closest')}
-            title={userLoc
-              ? 'Sort by closest first (real distance from your location)'
-              : 'Sort by mile marker (GPS not available)'}
-            style={{
-              width: '48%',
-              background: distance === 'closest' ? '#22c55e' : 'transparent',
-              color:      distance === 'closest' ? '#ffffff' : '#22c55e',
-              border: '2px solid #22c55e',
-              borderRadius: '10px',
-              padding: '10px 12px',
-              fontSize: '14px',
-              fontWeight: 900,
-              cursor: 'pointer',
-              fontFamily: 'Syne, sans-serif',
-              letterSpacing: '0.5px',
-              textTransform: 'uppercase',
-              minHeight: '40px',
-              transition: 'all 0.15s',
-            }}
-          >
-            📍 Closest
-          </button>
-        </div>
+        {/* (CLOSEST button removed — sort is always closest-first now and
+            the 'Closest shows first' label below the result count tells
+            drivers about the sort order. Button was a no-op since the
+            distance state was hardcoded to 'closest' anyway.) */}
 
         {/* Interstate filter row. Single-select. Tapping the same one
             again deselects (and clears direction). All buttons same
@@ -619,13 +589,33 @@ export default function HomePage() {
             distance control. We can bring filters back later if needed by
             restoring the panel + setShowFilters state.) */}
 
-        <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '14px' }}>
-          {loading
-            ? 'Loading...'
-            : locStatus === 'asking'
-              ? 'Getting your location...'
-              : `${filtered.length} ${category === 'rv_park' ? 'RV park' : 'hotel'}${filtered.length !== 1 ? 's' : ''} found`}
-        </p>
+        {/* Result count + sort guidance. Two pieces of small fog-colored
+            text on one row — count on the left, 'Closest shows first' on
+            the right — so drivers know how many results they're seeing
+            AND why they're in this order. The guidance text replaces the
+            old CLOSEST button (which used to be a no-op since the only
+            sort was already closest-first). */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          color: 'var(--fog)',
+          fontSize: '13px',
+          marginBottom: '14px',
+        }}>
+          <span>
+            {loading
+              ? 'Loading...'
+              : locStatus === 'asking'
+                ? 'Getting your location...'
+                : `${filtered.length} ${category === 'rv_park' ? 'RV park' : 'hotel'}${filtered.length !== 1 ? 's' : ''} found`}
+          </span>
+          {!loading && filtered.length > 0 && (
+            <span style={{ fontStyle: 'italic', color: 'var(--mist)', fontSize: '12px' }}>
+              📍 Closest shows first
+            </span>
+          )}
+        </div>
 
         {filtered.map((h) => {
           const price = h.price_min ? `$${h.price_min}${h.price_max ? `-$${h.price_max}` : ''}` : 'Call'
