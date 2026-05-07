@@ -333,18 +333,18 @@ export default function HomePage() {
     if (cap !== null) {
       filtered = filtered.filter((h) => h.distance !== null && (h.distance as number) <= cap)
     }
-    // Slider window. 1000+ effectively means 'no filter' (Anywhere) so we
-    // skip when the driver leaves it at max. Otherwise we show hotels in
-    // a ±DISTANCE_WINDOW band around the target — sliding to 200 surfaces
-    // hotels around the 200-mile mark instead of capping at 200. This is
-    // what a driver planning a stop in 4 hours actually wants.
+    // Slider as MAX CAP. Slider value = max distance to show.
+    //   100 = show hotels 0-100 mi away
+    //   500 = show hotels 0-500 mi away
+    //   1000 = max value = 'Anywhere' (no filter applied)
+    // Used to be a ±50 mi band centered on the target, but that hid
+    // closer hotels (driver in Cape Coral with slider at 100 saw I-75
+    // northbound options at 124 mi but missed Naples at 30 mi southbound).
+    // Max-cap matches the universal mental model of distance sliders.
     if (targetDistance < 1000) {
-      const lo = Math.max(0, targetDistance - DISTANCE_WINDOW)
-      const hi = targetDistance + DISTANCE_WINDOW
       filtered = filtered.filter((h) => {
         if (h.distance === null) return false
-        const d = h.distance as number
-        return d >= lo && d <= hi
+        return (h.distance as number) <= targetDistance
       })
     }
   }
@@ -553,7 +553,7 @@ export default function HomePage() {
               <span style={{ color: '#FF6A00', fontWeight: 700, fontSize: '14px' }}>
                 {targetDistance >= 1000
                   ? 'Anywhere'
-                  : `${targetDistance} mi ahead`}
+                  : `Within ${targetDistance} mi`}
               </span>
             </div>
             <input
