@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/app/components/SiteFooter'
+import { getDrivingDistances } from '@/lib/mapbox'
 
 type Hotel = {
   id: string
@@ -140,6 +141,13 @@ export default function HomePage() {
   const INTERSTATES = ['I-10', 'I-40', 'I-75', 'I-80', 'I-87', 'I-95']
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
+
+  // Real driving distances from Mapbox Matrix API. Map keyed by hotel.id.
+  // When this is populated, the render uses real driving miles. When empty
+  // (initial load, API failure, no GPS), the render falls back to haversine
+  // × 1.25 (the prior 'approx' behavior). Updates progressively as batches
+  // come back — drivers see haversine first, then real numbers replace.
+  const [drivingMiles, setDrivingMiles] = useState<Map<string, number>>(new Map())
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
   // who want hotels and RV parks together would just be confused by mixing
   // them, and most travelers know which they need before opening the app.
@@ -203,15 +211,71 @@ export default function HomePage() {
     })()
   }, [category])
 
+  // Mapbox Matrix API fetch — kicks in once we have GPS + hotels loaded.
+  // Strategy:
+  //   1. Pre-rank hotels by haversine distance (fast, in-memory)
+  //   2. Take the closest 24 (Matrix API limit)
+  //   3. Send them to Mapbox in ONE batch request
+  //   4. Store results in drivingMiles state — render immediately uses them
+  // We re-fetch when category changes (different hotels in scope) or when
+  // userLoc changes meaningfully (>1 mi — driving down the road triggers
+  // recalculation; standing still doesn't spam the API).
+  // Fetches the closest batch first because that's what the driver sees;
+  // if they slide the distance slider out to 500 mi we don't bother — the
+  // haversine fallback is plenty accurate at that distance.
+  useEffect(() => {
+    if (!userLoc || hotels.length === 0) return
+    // Rank by quick haversine first to pick the 24 closest worth fetching.
+    const ranked = hotels
+      .map(h => {
+        const hLat = h.latitude ?? h.exits?.lat
+        const hLng = h.longitude ?? h.exits?.lng
+        if (hLat == null || hLng == null) return null
+        return {
+          id: h.id,
+          lat: Number(hLat),
+          lng: Number(hLng),
+          d: milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng)),
+        }
+      })
+      .filter((x): x is { id: string; lat: number; lng: number; d: number } => x !== null)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 24)
+
+    if (ranked.length === 0) return
+
+    let cancelled = false
+    getDrivingDistances(
+      { lat: userLoc.lat, lng: userLoc.lng },
+      ranked.map(r => ({ id: r.id, lat: r.lat, lng: r.lng })),
+    ).then(map => {
+      if (cancelled || map.size === 0) return
+      // Merge into existing state (don't replace — preserves any prior
+      // batches in case we add multi-batch support later).
+      setDrivingMiles(prev => {
+        const next = new Map(prev)
+        map.forEach((v, k) => next.set(k, v.miles))
+        return next
+      })
+    })
+    return () => { cancelled = true }
+  }, [hotels, userLoc?.lat, userLoc?.lng])
+
   const hotelsWithDistance: Hotel[] = hotels.map((h) => {
     const hLat = h.latitude ?? h.exits?.lat
     const hLng = h.longitude ?? h.exits?.lng
     let dist: number | null = null
     if (userLoc && hLat && hLng) {
-      // Apply the 1.25 circuity factor here too, so homepage distances
-      // match the /search page and roughly approximate driving miles
-      // instead of straight-line ('as the crow flies') miles.
-      dist = milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng)) * 1.25
+      // Prefer real driving distance from Mapbox Matrix API. If we don't
+      // have it yet for this hotel (still loading, batch hasn't arrived,
+      // or API failed), fall back to haversine × 1.25 — the same approx
+      // we used to ship before Mapbox was wired.
+      const real = drivingMiles.get(h.id)
+      if (real != null) {
+        dist = real
+      } else {
+        dist = milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng)) * 1.25
+      }
     }
     return { ...h, distance: dist }
   })
