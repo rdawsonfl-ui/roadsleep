@@ -90,14 +90,16 @@ function AdminPageContent() {
   }
 
   async function loadAll() {
-    const [{ data: h }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
-      // Default Supabase PostgREST limit is 1000 rows. With 1,186+ listings
-      // (and growing), the admin was silently dropping the last ~186 — the
-      // most recently inserted, which meant I-80 hotels disappeared from
-      // the admin even though they're in the DB. .range(0, 4999) lifts the
-      // cap to 5000 — plenty of headroom for the foreseeable future without
-      // having to add real pagination yet.
-      supabase.from('hotels').select('*, exits(*, interstates(*))').range(0, 4999),
+    const [{ data: hotelsOnly }, { data: rvOnly }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
+      // Supabase PostgREST silently caps responses at 1000 rows even when
+      // .range() asks for more. Total listings (1,184) exceed that cap, so
+      // earlier .range(0, 4999) approach was getting truncated and the most
+      // recently added hotels (I-80 batch) were vanishing from admin.
+      // Fix: split into two type-filtered queries — hotels-only (~940 rows)
+      // and rv_parks-only (~244 rows). Each is under 1000 individually so
+      // both come back complete. Merge the arrays before sorting.
+      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'hotel').limit(1000),
+      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'rv_park').limit(1000),
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker').range(0, 4999),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
@@ -105,7 +107,8 @@ function AdminPageContent() {
       // per hotel below. hotelier_id stays so the Hoteliers tab works.
       supabase.from('call_logs').select('hotel_id, hotelier_id, called_at'),
     ])
-    if (h) {
+    const h = [...(hotelsOnly || []), ...(rvOnly || [])]
+    if (h.length > 0) {
       // Sort geographically: interstate name → state → mile marker (ascending)
       // This way the admin list reads like driving the corridor north-to-south.
       const sorted = [...h].sort((a, b) => {
