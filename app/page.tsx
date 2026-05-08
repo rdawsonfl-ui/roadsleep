@@ -158,6 +158,14 @@ export default function HomePage() {
   // far from any of our corridors, e.g. trip-planning from home).
   const [showAllInterstates, setShowAllInterstates] = useState<boolean>(false)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
+  // Throttled copy of userLoc that only updates when the driver has moved
+  // more than 1 mi from the last anchor. Used as the dep for the Mapbox
+  // Matrix refetch effect — without this, watchPosition firing every 30s
+  // at 70mph would trigger a fresh Matrix batch ~once per mile and burn
+  // through the free 50K/mo tier in days. Live userLoc is still used for
+  // the pill filter, direction filter, and haversine fallback distance,
+  // all of which are cheap in-memory math.
+  const [stableUserLoc, setStableUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
 
   // Real driving distances from Mapbox Matrix API. Map keyed by hotel.id.
@@ -179,15 +187,42 @@ export default function HomePage() {
       return
     }
     setLocStatus('asking')
-    navigator.geolocation.getCurrentPosition(
+    // watchPosition (not getCurrentPosition) — userLoc is now live. As the
+    // driver moves, GPS callbacks fire and we update state, which means
+    // the GPS-based interstate pill filter, the direction filter, and the
+    // distance-to-hotel calcs all stay accurate during a long drive.
+    // Without this, a driver who opened the app in Cape Coral and drove
+    // 4 hours north would still see Cape Coral's nearby corridors.
+    //
+    // enableHighAccuracy: true asks the OS for GPS-grade fix instead of
+    // wifi/cell trilateration. Worth the battery hit on a phone in a car
+    // mount; the whole product depends on knowing the road you're on.
+    // maximumAge: 30s — accept a fix up to 30s old to avoid hammering the
+    // GPS chip; at 70mph that's ~1 mi of staleness, well under our 75mi
+    // pill-filter threshold so it doesn't matter for that.
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude })
         setLocStatus('granted')
       },
       () => setLocStatus('denied'),
-      { timeout: 10000, maximumAge: 300000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
     )
+    return () => navigator.geolocation.clearWatch(watchId)
   }, [])
+
+  // Promote userLoc -> stableUserLoc only on > 1 mi shifts. First fix
+  // always promotes (no anchor yet). Subsequent fixes only promote when
+  // the driver has actually moved a meaningful amount; sub-mile jitter
+  // from GPS noise or sitting still doesn't trigger Mapbox refetches.
+  useEffect(() => {
+    if (!userLoc) return
+    setStableUserLoc(prev => {
+      if (!prev) return userLoc
+      const moved = milesBetween(prev.lat, prev.lng, userLoc.lat, userLoc.lng)
+      return moved > 1 ? userLoc : prev
+    })
+  }, [userLoc])
 
   // Fetch the active interstates list from Supabase on mount. Sorted by
   // name so the corridor pill row has a stable, predictable order regardless
@@ -266,8 +301,11 @@ export default function HomePage() {
   // Fetches the closest batch first because that's what the driver sees;
   // if they slide the distance slider out to 500 mi we don't bother — the
   // haversine fallback is plenty accurate at that distance.
+  // Note: keys on stableUserLoc (not userLoc) so we only refetch when the
+  // driver has moved > 1 mi. Without this, watchPosition would trigger
+  // Matrix calls every 30s — fast way to blow through the free tier.
   useEffect(() => {
-    if (!userLoc || hotels.length === 0) return
+    if (!stableUserLoc || hotels.length === 0) return
     // Rank by quick haversine first to pick the 24 closest worth fetching.
     const ranked = hotels
       .map(h => {
@@ -278,7 +316,7 @@ export default function HomePage() {
           id: h.id,
           lat: Number(hLat),
           lng: Number(hLng),
-          d: milesBetween(userLoc.lat, userLoc.lng, Number(hLat), Number(hLng)),
+          d: milesBetween(stableUserLoc.lat, stableUserLoc.lng, Number(hLat), Number(hLng)),
         }
       })
       .filter((x): x is { id: string; lat: number; lng: number; d: number } => x !== null)
@@ -289,7 +327,7 @@ export default function HomePage() {
 
     let cancelled = false
     getDrivingDistances(
-      { lat: userLoc.lat, lng: userLoc.lng },
+      { lat: stableUserLoc.lat, lng: stableUserLoc.lng },
       ranked.map(r => ({ id: r.id, lat: r.lat, lng: r.lng })),
     ).then(map => {
       if (cancelled || map.size === 0) return
@@ -302,7 +340,7 @@ export default function HomePage() {
       })
     })
     return () => { cancelled = true }
-  }, [hotels, userLoc?.lat, userLoc?.lng])
+  }, [hotels, stableUserLoc?.lat, stableUserLoc?.lng])
 
   const hotelsWithDistance: Hotel[] = hotels.map((h) => {
     const hLat = h.latitude ?? h.exits?.lat
