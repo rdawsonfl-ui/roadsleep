@@ -131,11 +131,18 @@ export default function HomePage() {
   // row shows NB/SB or EB/WB buttons. North-south = compares lat to
   // driver's lat. East-west = compares lng to driver's lng.
   const INTERSTATE_AXIS: Record<string, 'NS' | 'EW'> = {
+    'I-4':  'EW',
     'I-10': 'EW',
+    'I-20': 'EW',
+    'I-30': 'EW',
     'I-40': 'EW',
+    'I-70': 'EW',
     'I-80': 'EW',
     'I-5':  'NS',
+    'I-65': 'NS',
     'I-75': 'NS',
+    'I-81': 'NS',
+    'I-85': 'NS',
     'I-87': 'NS',
     'I-95': 'NS',
   }
