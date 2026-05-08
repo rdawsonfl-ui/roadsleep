@@ -134,6 +134,7 @@ export default function HomePage() {
     'I-10': 'EW',
     'I-40': 'EW',
     'I-80': 'EW',
+    'I-5':  'NS',
     'I-75': 'NS',
     'I-87': 'NS',
     'I-95': 'NS',
