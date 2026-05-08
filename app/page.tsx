@@ -635,18 +635,10 @@ export default function HomePage() {
             <div key={h.id} style={{ background: 'var(--night2)', border: h.featured ? '1px solid rgba(245,166,35,0.4)' : '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap' }}>
                 {h.featured && <span style={{ fontSize: '11px', background: 'rgba(245,166,35,0.15)', color: 'var(--amber)', padding: '3px 9px', borderRadius: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>★ Boosted</span>}
-                {/* Category pill — sized up so drivers can read the
-                    Hotel/RV Park label at a glance without leaning in. */}
-                <span style={{
-                  fontSize: '13px',
-                  background: h.type === 'rv_park' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.06)',
-                  color: h.type === 'rv_park' ? '#22c55e' : 'var(--mist)',
-                  padding: '4px 10px', borderRadius: '6px', fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                  border: `1px solid ${h.type === 'rv_park' ? 'rgba(34,197,94,0.3)' : 'var(--border)'}`,
-                }}>
-                  {h.type === 'rv_park' ? '🚐 RV Park' : '🏨 Hotel'}
-                </span>
+                {/* (Per-card category pill removed — drivers already chose
+                    Hotels vs RV Parks via the big banner buttons at the
+                    top, so this pill was redundant. Removing reduces
+                    visual noise per card.) */}
                 {/* Distance — the single most important piece of info on
                     the card now that filters are gone. Bumped up to 15px
                     bold white so it stands out from secondary text without
