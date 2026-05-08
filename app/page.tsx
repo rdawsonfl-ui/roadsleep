@@ -638,6 +638,23 @@ export default function HomePage() {
             drivers about the sort order. Button was a no-op since the
             distance state was hardcoded to 'closest' anyway.) */}
 
+        {/* Label above the pill row — drivers don't always realize the
+            pills are tappable. Subtle (small, mist-gray, uppercase) so it
+            reads as a label, not a heading. Centered to match the pill
+            row alignment below. */}
+        <div style={{
+          textAlign: 'center',
+          fontSize: '11px',
+          fontWeight: 600,
+          color: 'var(--fog)',
+          fontFamily: 'DM Sans, sans-serif',
+          letterSpacing: '0.8px',
+          textTransform: 'uppercase',
+          marginBottom: '8px',
+        }}>
+          Nearby Routes — tap to switch
+        </div>
+
         {/* Interstate filter row. Single-select. Tapping the same one
             again deselects (and clears direction). All buttons same
             style — small outlined pills. Selected one fills with amber.
