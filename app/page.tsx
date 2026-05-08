@@ -138,7 +138,11 @@ export default function HomePage() {
     'I-87': 'NS',
     'I-95': 'NS',
   }
-  const INTERSTATES = ['I-10', 'I-40', 'I-75', 'I-80', 'I-87', 'I-95']
+  // Active interstates loaded from Supabase. Starts empty so we don't paint
+  // a stale list; the corridor row simply doesn't render until data lands
+  // (typically <100ms). Fetched once on mount — interstates are admin-managed
+  // and don't change during a session.
+  const [INTERSTATES, setInterstates] = useState<string[]>([])
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
 
@@ -169,6 +173,31 @@ export default function HomePage() {
       () => setLocStatus('denied'),
       { timeout: 10000, maximumAge: 300000 }
     )
+  }, [])
+
+  // Fetch the active interstates list from Supabase on mount. Sorted by
+  // name so the corridor pill row has a stable, predictable order regardless
+  // of insertion order in the DB. is_active=true lets admins hide a corridor
+  // (e.g. before listings are seeded) without deleting the row.
+  useEffect(() => {
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('interstates')
+        .select('name')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+      if (error) {
+        console.error('failed to load interstates', error)
+        return
+      }
+      if (data) {
+        setInterstates(
+          (data as { name: string | null }[])
+            .map(r => r.name)
+            .filter((n): n is string => !!n)
+        )
+      }
+    })()
   }, [])
 
   useEffect(() => {
