@@ -405,8 +405,8 @@ export default function HomePage() {
             while truckers are on the road. */}
         <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
           {([
-            { key: 'hotel',   label: '🏨 Hotels' },
-            { key: 'rv_park', label: '🚐 RV Parks' },
+            { key: 'hotel',   label: 'Hotels' },
+            { key: 'rv_park', label: 'RV Parks' },
           ] as const).map(opt => {
             const active = category === opt.key
             return (
@@ -420,7 +420,7 @@ export default function HomePage() {
                   border: '2px solid var(--amber)',
                   borderRadius: '12px',
                   padding: '16px 12px',
-                  fontSize: '16px',
+                  fontSize: '20px',
                   fontWeight: 800,
                   cursor: 'pointer',
                   fontFamily: 'Syne, sans-serif',
