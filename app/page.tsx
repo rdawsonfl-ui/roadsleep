@@ -151,6 +151,12 @@ export default function HomePage() {
   // (typically <100ms). Fetched once on mount — interstates are admin-managed
   // and don't change during a session.
   const [INTERSTATES, setInterstates] = useState<string[]>([])
+  // 'Show all' override for the corridor pill row. When false (default),
+  // we filter pills by GPS — only show interstates with at least one exit
+  // within 75 mi of the driver. When true, show every active interstate.
+  // Auto-falls-back to true when GPS denied or zero matches (driver is
+  // far from any of our corridors, e.g. trip-planning from home).
+  const [showAllInterstates, setShowAllInterstates] = useState<boolean>(false)
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   const [locStatus, setLocStatus] = useState<'idle' | 'asking' | 'granted' | 'denied'>('idle')
 
@@ -318,6 +324,41 @@ export default function HomePage() {
   })
 
   let filtered = [...hotelsWithDistance]
+
+  // GPS-based corridor filter — figure out which interstates have at least
+  // one exit/listing within 75 mi of the driver. Drives the pill row below
+  // so a Florida driver doesn't see I-5 or I-80, and a Seattle driver
+  // doesn't see I-95. Falls back to all corridors when:
+  //   - GPS denied (no userLoc to compare against)
+  //   - showAllInterstates toggled on (driver tapped 'Show all')
+  //   - Zero matches (driver is far from every corridor — rather show all
+  //     than show nothing, e.g. trip-planning from a non-corridor city)
+  // Threshold of 75 mi catches 'I'm on this road' and 'this road is one
+  // turn away' without false-matching far-away corridors.
+  const NEARBY_INTERSTATE_RADIUS_MI = 75
+  const nearbyInterstateSet: Set<string> = (() => {
+    if (!userLoc) return new Set()
+    const s = new Set<string>()
+    for (const h of hotelsWithDistance) {
+      if (h.distance == null || h.distance > NEARBY_INTERSTATE_RADIUS_MI) continue
+      const iname = h.exits?.interstates?.name || h.near_interstate?.name
+      if (iname) s.add(iname)
+    }
+    return s
+  })()
+  // What we actually render in the pill row. If 'Show all' is on, GPS is
+  // unavailable, or nothing's nearby, render every active interstate.
+  let visibleInterstates: string[] =
+    showAllInterstates || !userLoc || nearbyInterstateSet.size === 0
+      ? INTERSTATES
+      : INTERSTATES.filter(name => nearbyInterstateSet.has(name))
+  // Safety: if the driver has an interstate selected that the GPS filter
+  // would otherwise hide (e.g. they picked I-5 then GPS resolved them in
+  // Florida), keep that pill visible so they can still deselect it.
+  if (selectedInterstate && !visibleInterstates.includes(selectedInterstate) && INTERSTATES.includes(selectedInterstate)) {
+    visibleInterstates = [...visibleInterstates, selectedInterstate].sort()
+  }
+  const isInterstateListFiltered = visibleInterstates.length < INTERSTATES.length
 
   // Category gate — restrict by selected type. Treat null/undefined type as
   // 'hotel' (DB default) so legacy rows aren't accidentally hidden when the
@@ -492,7 +533,11 @@ export default function HomePage() {
             again deselects (and clears direction). All buttons same
             style — small outlined pills. Selected one fills with amber.
             Sits above the direction row + slider so the flow reads
-            top-down: pick route → pick direction → pick distance. */}
+            top-down: pick route → pick direction → pick distance.
+            With GPS granted, the pill list is auto-filtered to corridors
+            within 75 mi of the driver — Florida driver doesn't see I-5,
+            Seattle driver doesn't see I-95. The 'Show all' link below
+            opens the unfiltered list for trip-planning. */}
         <div style={{
           display: 'flex',
           flexWrap: 'wrap',
@@ -500,7 +545,7 @@ export default function HomePage() {
           marginBottom: selectedInterstate ? '8px' : '16px',
           justifyContent: 'center',
         }}>
-          {INTERSTATES.map(iname => {
+          {visibleInterstates.map(iname => {
             const active = selectedInterstate === iname
             return (
               <button
@@ -533,6 +578,38 @@ export default function HomePage() {
             )
           })}
         </div>
+
+        {/* Show all / Show fewer link. Only renders when the GPS filter
+            is actually hiding something — otherwise it'd just be noise.
+            Center-aligned, small, mist-gray text-button (no border / no
+            pill shape) so it reads as 'extra option' not 'main control'.
+            If driver taps a hidden corridor (e.g. I-5 in trip-planning),
+            we keep their selection visible by un-filtering automatically. */}
+        {(isInterstateListFiltered || (showAllInterstates && userLoc && nearbyInterstateSet.size > 0)) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            marginBottom: selectedInterstate ? '8px' : '16px',
+          }}>
+            <button
+              onClick={() => setShowAllInterstates(v => !v)}
+              style={{
+                background: 'transparent',
+                color: 'var(--fog)',
+                border: 'none',
+                padding: '4px 8px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'DM Sans, sans-serif',
+                textDecoration: 'underline',
+                textUnderlineOffset: '2px',
+              }}
+            >
+              {showAllInterstates ? 'Show only nearby' : `Show all interstates (${INTERSTATES.length})`}
+            </button>
+          </div>
+        )}
 
         {/* Direction row — only renders when an interstate is selected.
             Shows NB/SB for north-south interstates (I-75, I-87, I-95)
