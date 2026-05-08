@@ -364,16 +364,18 @@ export default function HomePage() {
   let filtered = [...hotelsWithDistance]
 
   // GPS-based corridor filter — figure out which interstates have at least
-  // one exit/listing within 75 mi of the driver. Drives the pill row below
+  // one exit/listing within 200 mi of the driver. Drives the pill row below
   // so a Florida driver doesn't see I-5 or I-80, and a Seattle driver
   // doesn't see I-95. Falls back to all corridors when:
   //   - GPS denied (no userLoc to compare against)
   //   - showAllInterstates toggled on (driver tapped 'Show all')
   //   - Zero matches (driver is far from every corridor — rather show all
   //     than show nothing, e.g. trip-planning from a non-corridor city)
-  // Threshold of 75 mi catches 'I'm on this road' and 'this road is one
-  // turn away' without false-matching far-away corridors.
-  const NEARBY_INTERSTATE_RADIUS_MI = 75
+  // 200 mi is roughly a 3-hour drive at highway speed — captures the
+  // 'where am I going next' planning horizon, not just the road I'm on.
+  // Started at 75 mi but Cape Coral driver couldn't see I-10 (which is a
+  // realistic same-day destination from there).
+  const NEARBY_INTERSTATE_RADIUS_MI = 200
   const nearbyInterstateSet: Set<string> = (() => {
     if (!userLoc) return new Set()
     const s = new Set<string>()
