@@ -424,18 +424,27 @@ export default function HomePage() {
   let filtered = [...hotelsWithDistance]
 
   // GPS-based corridor filter — figure out which interstates have at least
-  // one exit/listing within 200 mi of the driver. Drives the pill row below
-  // so a Florida driver doesn't see I-5 or I-80, and a Seattle driver
-  // doesn't see I-95. Falls back to all corridors when:
+  // one exit/listing within range of the driver. Radius tracks the
+  // distance slider so pushing it out opens up both the hotel list AND
+  // the pill row in lockstep:
+  //
+  //   slider 25..200  -> pill radius = 200 (floor — always show nearby
+  //                      corridors even when slider is zoomed tight)
+  //   slider 200..999 -> pill radius = slider value (e.g. slider=500 ->
+  //                      I-10 pill appears for an Atlanta driver, etc.)
+  //   slider 1000 (Anywhere) -> show every active corridor (no filter)
+  //
+  // Also falls back to all corridors when:
   //   - GPS denied (no userLoc to compare against)
   //   - showAllInterstates toggled on (driver tapped 'Show all')
   //   - Zero matches (driver is far from every corridor — rather show all
-  //     than show nothing, e.g. trip-planning from a non-corridor city)
-  // 200 mi is roughly a 3-hour drive at highway speed — captures the
-  // 'where am I going next' planning horizon, not just the road I'm on.
-  // Started at 75 mi but Cape Coral driver couldn't see I-10 (which is a
-  // realistic same-day destination from there).
-  const NEARBY_INTERSTATE_RADIUS_MI = 200
+  //     than show nothing)
+  // The 200-mi floor means a driver who zooms the slider down to 25mi
+  // for nearby search doesn't lose visibility into 'I-10 is nearby and
+  // tappable' — both the list-distance filter and the pill filter are
+  // honest distance filters, but they have different best defaults.
+  const NEARBY_INTERSTATE_RADIUS_MI =
+    targetDistance >= 1000 ? Number.POSITIVE_INFINITY : Math.max(targetDistance, 200)
   const nearbyInterstateSet: Set<string> = (() => {
     if (!userLoc) return new Set()
     const s = new Set<string>()
