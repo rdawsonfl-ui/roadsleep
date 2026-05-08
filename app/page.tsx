@@ -118,9 +118,16 @@ export default function HomePage() {
   const DISTANCE_WINDOW = 50
 
   // Interstate filter — when set, only listings on this interstate show.
-  // Default null = no filter (current behavior, all corridors mixed).
-  // Driver picks one to scope their search to a specific corridor.
+  // Default null = no filter (all corridors mixed); auto-populated below
+  // once GPS + hotels resolve to whichever corridor the driver is closest
+  // to. Driver can change/clear by tapping pills.
   const [selectedInterstate, setSelectedInterstate] = useState<string | null>(null)
+  // Tracks whether the driver has manually touched the corridor filter
+  // (tapped a pill or cleared one). Once true, auto-select stops trying
+  // to override — driver's choice wins. Reset would require a fresh page
+  // load, which is fine: the auto-pick is a first-load convenience, not
+  // a continuous behavior.
+  const [interstateUserTouched, setInterstateUserTouched] = useState<boolean>(false)
   // Direction filter — only meaningful after an interstate is selected.
   // 'N'/'S' for north-south interstates, 'E'/'W' for east-west. We use
   // GPS lat (for NS) or lng (for EW) to figure out which exits are
@@ -223,6 +230,39 @@ export default function HomePage() {
       return moved > 1 ? userLoc : prev
     })
   }, [userLoc])
+
+  // Auto-select the corridor the driver is closest to, so they don't have
+  // to figure out that the pills are interactive. Runs once when hotels +
+  // GPS first become available together. Picks the interstate that owns
+  // the single closest listing — almost always the road the driver is on.
+  //
+  // Subtlety: we deliberately key only on whether selectedInterstate is
+  // null, not on userLoc movement. Otherwise driving between corridors
+  // would flip the selection mid-trip — confusing if the driver is
+  // already looking at a list. Once auto-set (or once the driver taps a
+  // pill), we leave it alone for the session. Driver can clear & re-open
+  // for a new auto-pick if they take a new route.
+  useEffect(() => {
+    if (interstateUserTouched) return
+    if (selectedInterstate) return  // already auto-set this session
+    if (!userLoc || hotels.length === 0) return
+    let bestIname: string | null = null
+    let bestDist = Number.POSITIVE_INFINITY
+    for (const h of hotels) {
+      const lat = h.latitude ?? h.exits?.lat
+      const lng = h.longitude ?? h.exits?.lng
+      const iname = h.exits?.interstates?.name || h.near_interstate?.name
+      if (lat == null || lng == null || !iname) continue
+      const d = milesBetween(userLoc.lat, userLoc.lng, Number(lat), Number(lng))
+      if (d < bestDist) {
+        bestDist = d
+        bestIname = iname
+      }
+    }
+    if (bestIname) {
+      setSelectedInterstate(bestIname)
+    }
+  }, [hotels, userLoc, selectedInterstate, interstateUserTouched])
 
   // Fetch the active interstates list from Supabase on mount. Sorted by
   // name so the corridor pill row has a stable, predictable order regardless
@@ -591,6 +631,7 @@ export default function HomePage() {
               <button
                 key={iname}
                 onClick={() => {
+                  setInterstateUserTouched(true)
                   if (active) {
                     setSelectedInterstate(null)
                     setSelectedDirection(null)
