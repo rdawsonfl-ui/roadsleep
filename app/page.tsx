@@ -310,18 +310,38 @@ export default function HomePage() {
       // Build the query. Server-side filter on type + (optionally) verified.
       // Defensive: skip rows with empty/null name (artifacts of interrupted
       // hotelier signup attempts).
-      let q = supabase
-        .from('hotels')
-        .select('id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))')
-        .eq('type', category)
-        .not('name', 'is', null)
-        .neq('name', '')
-        .limit(1000)
-      if (!showAll) {
-        q = q.eq('verified', true)
+      //
+      // Why two paged fetches: PostgREST has a server-side 1000-row hard cap
+      // per request that overrides client-set limits. With ~1,335 hotels in
+      // the DB, a single .limit(2000) silently returned only the first 1000
+      // — meaning the most recently inserted ~335 hotels (latest corridors)
+      // never reached the homepage. Symptom: I-10 / I-65 / I-81 hotels
+      // missing from search and corresponding pills missing from the GPS-
+      // filtered route picker.
+      // Fix: explicit range pagination. Each .range(a, b) under 1000 rows
+      // returns its full slice. Two pages cover up to 2000 rows; we'll
+      // need to paginate further (or move to a smarter query) when the
+      // platform crosses ~2000 hotels per category.
+      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))'
+      const buildQuery = (start: number, end: number) => {
+        let q = supabase
+          .from('hotels')
+          .select(baseSelect)
+          .eq('type', category)
+          .not('name', 'is', null)
+          .neq('name', '')
+          .range(start, end)
+        if (!showAll) {
+          q = q.eq('verified', true)
+        }
+        return q
       }
-      const { data } = await q
-      if (data) {
+      const [page1, page2] = await Promise.all([
+        buildQuery(0, 999),
+        buildQuery(1000, 1999),
+      ])
+      const data = [...(page1.data ?? []), ...(page2.data ?? [])]
+      if (data.length > 0) {
         const withNullDist: Hotel[] = (data as any[]).map((h) => ({ ...h, distance: null }))
         setHotels(withNullDist)
       }
