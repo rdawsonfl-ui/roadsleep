@@ -652,7 +652,7 @@ export default function HomePage() {
           textTransform: 'uppercase',
           marginBottom: '8px',
         }}>
-          Nearby Routes — tap to switch
+          Upcoming Routes — tap to switch
         </div>
 
         {/* Interstate filter row. Single-select. Tapping the same one
