@@ -34,7 +34,7 @@ export default function Nav() {
         letterSpacing: '-0.5px',
         textDecoration: 'none',
       }}>
-        Road<span style={{ color: 'var(--amber)' }}>Sleep</span>
+        Road<span style={{ color: 'var(--amber)' }}>Sleep</span><sup style={{ fontSize: '0.5em', marginLeft: '1px', fontWeight: 600 }}>™</sup>
       </Link>
       <div style={{ display: 'flex', gap: '4px' }}>
         {tabs.map(t => {
