@@ -153,6 +153,77 @@ export default function HomePage() {
     'I-87': 'NS',
     'I-95': 'NS',
   }
+
+  // Real-world interstate intersections — corridors that physically cross or
+  // closely connect (within ~35 mi via interchange/beltway). Derived once from
+  // the closest exit pair between every two corridors in our DB; entries kept
+  // when the closest pair was <= 35 mi (true interchanges + beltway-connected
+  // corridors like I-95 ↔ I-40 via Raleigh's I-440), excluded above that
+  // (parallel corridors like I-75 ↔ I-95 in Florida — closest is 60 mi, never
+  // touch within the state).
+  //
+  // Why this exists: GPS-based "within slider range" alone is wrong for
+  // parallel highways. A driver going north on I-75 in Florida sees I-95
+  // showing up as a pill because it's geographically within 150 mi to the
+  // east — but they can't get to it without a major detour. Intersection
+  // filter hides corridors that don't cross the selected one.
+  //
+  // Each intersection has an anchor lat/lng (the midpoint of the closest
+  // exit pair) so we can check "is this intersection AHEAD of the driver"
+  // in their direction of travel. Symmetric: lookup works either direction.
+  //
+  // Empty/unseeded corridors (I-4, I-5, I-20, I-30, I-85) have no entries
+  // because their exits aren't yet in the DB — handled correctly by the
+  // filter (those corridors have no listings to show anyway).
+  type Intersection = { lat: number; lng: number; nearCity: string }
+  const INTERSTATE_INTERSECTIONS: Record<string, Record<string, Intersection>> = {
+    'I-10': {
+      'I-65': { lat: 30.69, lng: -88.04, nearCity: 'Mobile' },
+      'I-75': { lat: 30.19, lng: -82.64, nearCity: 'Lake City' },
+      'I-95': { lat: 30.32, lng: -81.66, nearCity: 'Jacksonville' },
+    },
+    'I-40': {
+      'I-65': { lat: 36.16, lng: -86.78, nearCity: 'Nashville' },
+      'I-75': { lat: 35.96, lng: -83.92, nearCity: 'Knoxville' },
+      'I-81': { lat: 36.05, lng: -83.45, nearCity: 'Knoxville (I-81 split)' },
+      'I-95': { lat: 35.78, lng: -78.64, nearCity: 'Raleigh' },
+    },
+    'I-65': {
+      'I-10': { lat: 30.69, lng: -88.04, nearCity: 'Mobile' },
+      'I-40': { lat: 36.16, lng: -86.78, nearCity: 'Nashville' },
+      'I-70': { lat: 39.77, lng: -86.16, nearCity: 'Indianapolis' },
+      'I-80': { lat: 41.59, lng: -87.34, nearCity: 'Gary' },
+    },
+    'I-70': {
+      'I-65': { lat: 39.77, lng: -86.16, nearCity: 'Indianapolis' },
+      'I-75': { lat: 39.78, lng: -84.20, nearCity: 'Dayton' },
+      'I-81': { lat: 39.62, lng: -77.72, nearCity: 'Hagerstown' },
+      'I-95': { lat: 39.40, lng: -76.71, nearCity: 'Baltimore' },
+    },
+    'I-75': {
+      'I-10': { lat: 30.19, lng: -82.64, nearCity: 'Lake City' },
+      'I-40': { lat: 35.96, lng: -83.92, nearCity: 'Knoxville' },
+      'I-70': { lat: 39.78, lng: -84.20, nearCity: 'Dayton' },
+    },
+    'I-80': {
+      'I-65': { lat: 41.59, lng: -87.34, nearCity: 'Gary' },
+      'I-81': { lat: 41.05, lng: -75.99, nearCity: 'Hazleton' },
+    },
+    'I-81': {
+      'I-40': { lat: 36.05, lng: -83.45, nearCity: 'Knoxville (I-81 split)' },
+      'I-70': { lat: 39.62, lng: -77.72, nearCity: 'Hagerstown' },
+      'I-80': { lat: 41.05, lng: -75.99, nearCity: 'Hazleton' },
+    },
+    'I-87': {
+      'I-95': { lat: 40.91, lng: -73.85, nearCity: 'Bronx' },
+    },
+    'I-95': {
+      'I-10': { lat: 30.32, lng: -81.66, nearCity: 'Jacksonville' },
+      'I-40': { lat: 35.78, lng: -78.64, nearCity: 'Raleigh' },
+      'I-70': { lat: 39.40, lng: -76.71, nearCity: 'Baltimore' },
+      'I-87': { lat: 40.91, lng: -73.85, nearCity: 'Bronx' },
+    },
+  }
   // Active interstates loaded from Supabase. Starts empty so we don't paint
   // a stale list; the corridor row simply doesn't render until data lands
   // (typically <100ms). Fetched once on mount — interstates are admin-managed
@@ -455,13 +526,69 @@ export default function HomePage() {
     }
     return s
   })()
-  // What we actually render in the pill row. If 'Show all' is on, GPS is
-  // unavailable, or nothing's nearby, render every active interstate.
-  let visibleInterstates: string[] =
-    showAllInterstates || !userLoc || nearbyInterstateSet.size === 0
-      ? INTERSTATES
-      : INTERSTATES.filter(name => nearbyInterstateSet.has(name))
-  // Safety: if the driver has an interstate selected that the GPS filter
+
+  // Intersection-based pill filter (overrides nearbyInterstateSet when active).
+  //
+  // Trigger: driver has selected a corridor (selectedInterstate is set) and
+  // GPS resolved. In that mode, the pill row should only show corridors the
+  // driver could realistically reach — the selected corridor itself, plus
+  // corridors that intersect it within slider range AHEAD of the driver.
+  //
+  // Why "ahead": parallel non-intersecting corridors are the obvious noise
+  // case. But intersections behind the driver are also noise — a driver
+  // heading north past Lake City, FL doesn't need to see I-10 anymore;
+  // they've already passed that interchange.
+  //
+  // "Ahead" uses the corridor's NS/EW axis: NS corridor + driver heading
+  // north = intersections with greater lat. NS + south = lesser lat. EW
+  // + east = greater lng. EW + west = lesser lng. If no direction is
+  // selected yet (selectedDirection is null), we keep intersections in
+  // BOTH directions — driver's still scoping the trip.
+  //
+  // Distance: the intersection's anchor lat/lng vs the driver's GPS, in
+  // straight-line miles. Threshold = same NEARBY_INTERSTATE_RADIUS_MI as
+  // the nearby filter — keeps the slider authoritative for both layers.
+  const intersectionInterstateSet: Set<string> | null = (() => {
+    if (!selectedInterstate || !userLoc) return null
+    const intersections = INTERSTATE_INTERSECTIONS[selectedInterstate]
+    if (!intersections) return null
+    const axis = INTERSTATE_AXIS[selectedInterstate]
+    const s = new Set<string>([selectedInterstate])
+    for (const [otherName, point] of Object.entries(intersections)) {
+      // Distance to intersection from current GPS
+      const d = milesBetween(userLoc.lat, userLoc.lng, point.lat, point.lng)
+      if (d > NEARBY_INTERSTATE_RADIUS_MI) continue
+      // Direction check — only enforced once the driver has picked NB/SB/EB/WB.
+      if (selectedDirection) {
+        if (axis === 'NS') {
+          if (selectedDirection === 'N' && point.lat <= userLoc.lat) continue
+          if (selectedDirection === 'S' && point.lat >= userLoc.lat) continue
+        } else if (axis === 'EW') {
+          if (selectedDirection === 'E' && point.lng <= userLoc.lng) continue
+          if (selectedDirection === 'W' && point.lng >= userLoc.lng) continue
+        }
+      }
+      s.add(otherName)
+    }
+    return s
+  })()
+
+  // What we actually render in the pill row. Three layers, in priority order:
+  //   1. showAllInterstates ON, GPS off, or no nearby matches -> ALL corridors
+  //   2. selectedInterstate set + intersection map known -> intersection set
+  //      (the route-aware filter — selected corridor + corridors that cross
+  //       it within slider range ahead)
+  //   3. otherwise -> nearby distance set (existing behavior — corridors
+  //      with any listing within slider range)
+  let visibleInterstates: string[]
+  if (showAllInterstates || !userLoc || (nearbyInterstateSet.size === 0 && !intersectionInterstateSet)) {
+    visibleInterstates = INTERSTATES
+  } else if (intersectionInterstateSet) {
+    visibleInterstates = INTERSTATES.filter(name => intersectionInterstateSet.has(name))
+  } else {
+    visibleInterstates = INTERSTATES.filter(name => nearbyInterstateSet.has(name))
+  }
+  // Safety: if the driver has an interstate selected that the pill filter
   // would otherwise hide (e.g. they picked I-5 then GPS resolved them in
   // Florida), keep that pill visible so they can still deselect it.
   if (selectedInterstate && !visibleInterstates.includes(selectedInterstate) && INTERSTATES.includes(selectedInterstate)) {
