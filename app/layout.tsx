@@ -13,7 +13,7 @@ import PWAInit from "./PWAInit";
 import { Analytics } from "@vercel/analytics/react";
 
 export const metadata: Metadata = {
-  title: "RoadSleep – Find a Stop by Mile Marker",
+  title: "RoadSleep™ – Find a Stop by Mile Marker",
   description: "Hotels and RV parks along major interstates — find your next stop fast.",
   // PWA metadata. The manifest tells phones we're installable; the
   // apple-touch-icon is what iOS uses on the home screen since iOS
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "RoadSleep",
+    title: "RoadSleep™",
   },
 };
 

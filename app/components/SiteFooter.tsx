@@ -32,7 +32,7 @@ export default function SiteFooter() {
         </a>
       )}
       <div style={{ marginTop: '14px', fontSize: '10px', opacity: 0.6 }}>
-        © {new Date().getFullYear()} RoadSleep
+        © {new Date().getFullYear()} RoadSleep<sup style={{ fontSize: '0.7em', marginLeft: '1px' }}>™</sup>
       </div>
     </footer>
   )

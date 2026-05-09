@@ -62,7 +62,7 @@ export default function PWAInit() {
   return (
     <div
       role="dialog"
-      aria-label="Install RoadSleep"
+      aria-label="Install RoadSleep™"
       style={{
         position: 'fixed',
         left: '12px',
@@ -85,7 +85,7 @@ export default function PWAInit() {
     >
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 700, marginBottom: '4px' }}>
-          Install RoadSleep
+          Install RoadSleep<sup style={{ fontSize: '0.65em', marginLeft: '1px' }}>™</sup>
         </div>
         <div style={{ color: 'rgba(245,245,245,0.78)', fontSize: '13px' }}>
           Tap{' '}
@@ -97,7 +97,7 @@ export default function PWAInit() {
               <path d="M2 8V16C2 16.5523 2.44772 17 3 17H11C11.5523 17 12 16.5523 12 16V8" stroke="#FF6A00" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </span>{' '}
-          then "Add to Home Screen" to use RoadSleep without opening Safari.
+          then "Add to Home Screen" to use RoadSleep<sup style={{ fontSize: '0.7em', marginLeft: '1px' }}>™</sup> without opening Safari.
         </div>
       </div>
       <button
