@@ -134,9 +134,16 @@ function bearingToDirection(bearing: number, axis: 'NS' | 'EW'): 'N' | 'S' | 'E'
   return bearing < 180 ? 'E' : 'W'
 }
 
-async function logCall(hotelId: string, fromBoost: boolean = false) {
+// Insert a call_logs row. Returns the new row's id when from_boost is true
+// so the caller can hand it to trackApproach() for arrival proof. Non-boost
+// calls don't bother — no need to track arrival for organic taps.
+async function logCall(
+  hotelId: string,
+  fromBoost: boolean = false,
+  initialDistanceMi: number | null = null,
+): Promise<string | null> {
   try {
-    await supabase.from('call_logs').insert({
+    const insert: Record<string, unknown> = {
       hotel_id: hotelId,
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
       // Mark the call when the driver tapped a currently-boosted listing.
@@ -145,9 +152,124 @@ async function logCall(hotelId: string, fromBoost: boolean = false) {
       // Column is nullable for backwards compatibility with rows logged
       // before this column existed.
       from_boost: fromBoost,
-    })
+    }
+    // Snapshot the distance at the moment of tap so the dashboard can show
+    // 'closed from 12mi to 0.2mi' rather than just 'arrived'. Only meaningful
+    // when we actually have a GPS fix; null otherwise.
+    if (fromBoost && initialDistanceMi != null) {
+      insert.initial_distance_mi = initialDistanceMi
+      insert.closest_approach_mi = initialDistanceMi
+    }
+    const { data, error } = await supabase
+      .from('call_logs').insert(insert).select('id').single()
+    if (error) {
+      console.error('call log failed', error)
+      return null
+    }
+    return data?.id ?? null
   } catch (e) {
     console.error('call log failed', e)
+    return null
+  }
+}
+
+// GPS-based arrival proof for boost calls. After the driver taps Call on a
+// boosted hotel, we keep watching their GPS for up to 90 minutes (long
+// enough for a 50-mile approach at highway speed). Every minute we:
+//   - sample current GPS
+//   - compute distance to the hotel
+//   - if this is the closest we've seen, update closest_approach_mi
+//   - if distance < 0.25mi, mark arrived_at = now() and stop
+// Stops when: arrival detected, 90 minutes elapse, or page unloads. The
+// tracker is fire-and-forget; the caller doesn't need to await it.
+//
+// Why this matters: it's hotelier-grade proof that the boost paid off.
+// A tap that never gets closer than 12mi looks suspicious. A tap that
+// closes from 8mi to 0.1mi at highway speed is unambiguous: real driver,
+// real arrival, real booking attempt.
+//
+// Returns the cleanup function so the caller can cancel tracking early
+// if e.g. the modal closes.
+function trackApproach(
+  callLogId: string,
+  hotelLat: number,
+  hotelLng: number,
+): () => void {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    return () => {}
+  }
+
+  const startedAt = Date.now()
+  const MAX_TRACKING_MS = 90 * 60 * 1000   // 90 minutes
+  const SAMPLE_INTERVAL_MS = 60 * 1000      // every minute
+  const ARRIVAL_THRESHOLD_MI = 0.25
+
+  let closestMi = Number.POSITIVE_INFINITY
+  let arrived = false
+  let cancelled = false
+
+  const tick = () => {
+    if (cancelled || arrived) return
+    if (Date.now() - startedAt > MAX_TRACKING_MS) {
+      // Window expired — final write of tracking_ended_at and we're done.
+      supabase.from('call_logs').update({
+        tracking_ended_at: new Date().toISOString(),
+      }).eq('id', callLogId).then(undefined, () => {})
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (cancelled || arrived) return
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        // Haversine inline so we don't depend on the milesBetween helper
+        // (this file is shared across server/client boundaries in some
+        // refactors and the helper might not be in scope here).
+        const R = 3958.8
+        const toRad = (d: number) => (d * Math.PI) / 180
+        const dLat = toRad(hotelLat - lat)
+        const dLng = toRad(hotelLng - lng)
+        const a = Math.sin(dLat / 2) ** 2
+          + Math.cos(toRad(lat)) * Math.cos(toRad(hotelLat)) * Math.sin(dLng / 2) ** 2
+        const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+
+        if (d < closestMi) {
+          closestMi = d
+          const update: Record<string, unknown> = {
+            closest_approach_mi: Number(d.toFixed(2)),
+          }
+          if (d < ARRIVAL_THRESHOLD_MI && !arrived) {
+            arrived = true
+            update.arrived_at = new Date().toISOString()
+            update.tracking_ended_at = new Date().toISOString()
+          }
+          supabase.from('call_logs').update(update).eq('id', callLogId)
+            .then(undefined, () => {})
+        }
+
+        if (!arrived) {
+          setTimeout(tick, SAMPLE_INTERVAL_MS)
+        }
+      },
+      () => {
+        // GPS failed — try again next interval, don't kill tracking.
+        if (!cancelled && !arrived) setTimeout(tick, SAMPLE_INTERVAL_MS)
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 },
+    )
+  }
+
+  // Kick off first sample after a short delay so the driver has time to
+  // exit the dialer and (typically) return to the app.
+  setTimeout(tick, 5000)
+
+  return () => {
+    cancelled = true
+    // Best-effort: stamp tracking_ended_at so the dashboard knows the
+    // tracker terminated cleanly rather than going stale.
+    supabase.from('call_logs').update({
+      tracking_ended_at: new Date().toISOString(),
+    }).eq('id', callLogId).then(undefined, () => {})
   }
 }
 
@@ -1672,8 +1794,22 @@ export default function HomePage() {
                   before navigation so the call_logs row gets written. */}
               <a
                 href={`tel:${h.phone || ''}`}
-                onClick={() => {
-                  logCall(h.id, true)
+                onClick={async () => {
+                  // Snapshot the initial driver→hotel distance so the
+                  // dashboard can show 'closed from X to Y'. Distance lives
+                  // on h.distance (already computed earlier in the render);
+                  // null is fine if GPS was denied or hotel has no coords.
+                  const initialDist = h.distance ?? null
+                  // logCall returns the new row id; if we got one and the
+                  // hotel has coordinates, kick off background GPS tracking
+                  // for arrival proof. trackApproach is fire-and-forget;
+                  // it lives until arrival or 90 minutes elapse.
+                  const callId = await logCall(h.id, true, initialDist)
+                  const hLat = h.latitude ?? h.exits?.lat
+                  const hLng = h.longitude ?? h.exits?.lng
+                  if (callId && hLat != null && hLng != null) {
+                    trackApproach(callId, Number(hLat), Number(hLng))
+                  }
                   // Don't close immediately — let driver come back from
                   // the dialer and still see the code at the desk.
                 }}

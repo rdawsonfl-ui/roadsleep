@@ -17,6 +17,10 @@ type HotelWithStats = {
   // Lets hoteliers see whether their boost spend converted.
   boost_calls_today: number
   boost_calls_this_month: number
+  // GPS-verified arrivals — driver tapped Call AND actually drove to
+  // within 0.25mi of the hotel. Strongest signal a boost converted.
+  arrived_today: number
+  arrived_this_month: number
   revenue_today: number
   revenue_this_month: number
   revenue_last_month: number
@@ -37,11 +41,12 @@ export default function HotelierDashboard() {
     const { data: hotelsData } = await supabase.from('hotels').select('id, name, phone, featured, est_revenue_per_call')
     if (!hotelsData) { setLoading(false); return }
 
-    // Include from_boost so the dashboard can attribute calls to boosts.
-    // Column was added later — older rows have NULL/false and count as
-    // organic, which is correct (they couldn't have come from a boost
-    // that didn't yet have attribution).
-    const { data: calls } = await supabase.from('call_logs').select('hotel_id, called_at, from_boost')
+    // Include from_boost + arrival tracking columns so the dashboard can
+    // attribute calls to boosts AND show GPS-verified arrivals (the
+    // hotelier-grade proof that the boost actually delivered a customer).
+    const { data: calls } = await supabase
+      .from('call_logs')
+      .select('hotel_id, called_at, from_boost, arrived_at, closest_approach_mi, initial_distance_mi')
     const callList = calls || []
 
     const now = new Date()
@@ -67,6 +72,10 @@ export default function HotelierDashboard() {
       // treat null/false as organic.
       const boostToday = hCalls.filter(c => c.from_boost === true && new Date(c.called_at) >= todayStart).length
       const boostThisMonth = hCalls.filter(c => c.from_boost === true && new Date(c.called_at) >= monthStart).length
+      // GPS-verified arrivals — driver tapped Call AND actually drove to
+      // within 0.25mi of the hotel. Strongest signal of booking conversion.
+      const arrivedToday = hCalls.filter(c => c.arrived_at && new Date(c.called_at) >= todayStart).length
+      const arrivedThisMonth = hCalls.filter(c => c.arrived_at && new Date(c.called_at) >= monthStart).length
       const projected = dayOfMonth > 0 ? Math.round((thisMonth / dayOfMonth) * daysInMonth) : 0
       return {
         ...h,
@@ -74,6 +83,8 @@ export default function HotelierDashboard() {
         calls_last_month: lastMonth, calls_all_time: all,
         boost_calls_today: boostToday,
         boost_calls_this_month: boostThisMonth,
+        arrived_today: arrivedToday,
+        arrived_this_month: arrivedThisMonth,
         revenue_today: today * rate,
         revenue_this_month: thisMonth * rate,
         revenue_last_month: lastMonth * rate,
@@ -183,7 +194,9 @@ export default function HotelierDashboard() {
                       boost-attributed calls so far — keeps the dashboard
                       clean for hotels that have never boosted. The point of
                       this row is to tell the hotelier "X of your Y calls
-                      today came in via a boost" — concrete ROI signal. */}
+                      today came in via a boost" — concrete ROI signal.
+                      Plus GPS-verified arrivals when we have them, which is
+                      the strongest proof the boost actually drove revenue. */}
                   {(selected.boost_calls_today > 0 || selected.boost_calls_this_month > 0) && (
                     <div style={{
                       marginTop: '12px',
@@ -194,14 +207,27 @@ export default function HotelierDashboard() {
                       fontSize: '13px',
                       color: 'var(--white)',
                     }}>
-                      <span style={{ color: 'var(--amber)', fontWeight: 700 }}>★ Boost attribution:</span>
-                      {' '}
-                      <span>{selected.boost_calls_today} call{selected.boost_calls_today === 1 ? '' : 's'} today</span>
-                      {' · '}
-                      <span>{selected.boost_calls_this_month} this month</span>
-                      <span style={{ color: 'var(--fog)', marginLeft: '8px' }}>
-                        (driver tapped Call while you were boosted)
-                      </span>
+                      <div>
+                        <span style={{ color: 'var(--amber)', fontWeight: 700 }}>★ Boost attribution:</span>
+                        {' '}
+                        <span>{selected.boost_calls_today} call{selected.boost_calls_today === 1 ? '' : 's'} today</span>
+                        {' · '}
+                        <span>{selected.boost_calls_this_month} this month</span>
+                      </div>
+                      {(selected.arrived_today > 0 || selected.arrived_this_month > 0) && (
+                        <div style={{ marginTop: '6px' }}>
+                          <span style={{ color: '#22c55e', fontWeight: 700 }}>📍 Arrivals (GPS-verified):</span>
+                          {' '}
+                          <span>{selected.arrived_today} today · {selected.arrived_this_month} this month</span>
+                          <span style={{ color: 'var(--fog)', marginLeft: '8px' }}>
+                            (driver drove within 0.25mi of your front door)
+                          </span>
+                        </div>
+                      )}
+                      <div style={{ color: 'var(--fog)', marginTop: '4px', fontSize: '12px' }}>
+                        Boost calls log when a driver taps Call on a boosted listing.
+                        Arrivals log when GPS confirms they actually drove here.
+                      </div>
                     </div>
                   )}
                 </div>
