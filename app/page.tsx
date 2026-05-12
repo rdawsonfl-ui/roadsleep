@@ -888,14 +888,38 @@ export default function HomePage() {
       //   if MM grows S -> ahead has lower MM  -> signed =  userMM - hMM
       if (userMM != null && hMM != null && mmAxisSign != null) {
         const driverGoesPositive = effectiveDirection === 'N' || effectiveDirection === 'E'
-        // mmAxisSign tells us which cardinal MM grows toward (within the
-        // corridor's axis). If MM grows toward the same cardinal the driver
-        // is going, ahead = higher MM. Otherwise ahead = lower MM.
         const mmGrowsWithDriver = (driverGoesPositive && mmAxisSign === 1)
                                 || (!driverGoesPositive && mmAxisSign === -1)
-        const signed = mmGrowsWithDriver
+        const mmSigned = mmGrowsWithDriver
           ? Number(hMM) - userMM
           : userMM - Number(hMM)
+
+        // Geographic sanity check. The MM value can be miskeyed in the DB
+        // (we've seen Westport Hotel @ MM 281 even though Westport is
+        // north of Queensbury @ MM 285). When MM disagrees with lat/lng
+        // about which side of the driver the hotel is on, trust geography.
+        //
+        // Convert lat/lng delta into a rough signed-miles value: degrees
+        // of latitude are ~69 mi each; degrees of longitude are ~69 * cos(lat)
+        // — but we only need sign + scale for rearview, so a flat 69 is
+        // close enough for this check.
+        const DEG_TO_MI = 69
+        const positional = axis === 'NS' ? (Number(lat) - userLoc.lat)
+                                          : (Number(lng) - userLoc.lng)
+        const geoSigned = driverGoesPositive
+          ? positional * DEG_TO_MI
+          : -positional * DEG_TO_MI
+
+        // If MM and geo disagree on the ahead/behind verdict (one is
+        // positive, the other negative) AND the disagreement is meaningful
+        // (more than 5 mi apart — small disagreements are just road curvature),
+        // trust the geographic answer. Otherwise prefer MM since it's the
+        // along-the-road measure.
+        const disagreeAndMeaningful =
+          Math.sign(mmSigned) !== Math.sign(geoSigned)
+          && Math.abs(mmSigned - geoSigned) > 5
+        const signed = disagreeAndMeaningful ? geoSigned : mmSigned
+
         return signed >= -REARVIEW_MI
       }
 
