@@ -1431,10 +1431,10 @@ export default function HomePage() {
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: '8px',
                       color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 800,
-                      fontSize: '18px', lineHeight: 1.1, textAlign: 'left',
+                      fontSize: '22px', lineHeight: 1.1, textAlign: 'left',
                     }}>
-                      <span style={{ fontSize: '24px', lineHeight: 1 }} aria-hidden="true">←</span>
-                      <span>Limited time deal<br/>RoadSleep rate</span>
+                      <span style={{ fontSize: '28px', lineHeight: 1 }} aria-hidden="true">←</span>
+                      <span>RoadSleep<br/>rate</span>
                     </div>
                   </div>
                 </div>
