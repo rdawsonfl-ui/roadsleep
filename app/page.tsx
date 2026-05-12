@@ -942,13 +942,15 @@ export default function HomePage() {
     }
   }
 
-  // Sort cascade. ALWAYS the same order regardless of distance preset:
+  // Sort cascade. Always closest-first.
   //   1. Boosted listings first (paid placement — preserved across all states)
-  //   2. Distance — ascending FROM THE SLIDER TARGET. As driver slides
-  //      from 100 to 500 mi, the hotel closest to 500 mi rises to the top.
-  //      'Anywhere' (slider at max) reverts to plain closest-first because
-  //      no target makes sense with no filter.
+  //   2. Distance ascending — closest hotel to the driver rises to top.
   //   3. Listings with no distance data sink to the end.
+  //
+  // (Previously the sort was "distance-from-slider-target" — slider at 500
+  // put hotels around 500 mi at the top. That confused drivers who expected
+  // a normal closest-first list. Slider is now pure max-cap; ranking is
+  // pure closest-first.)
   filtered.sort((a, b) => {
     if (a.featured !== b.featured) return a.featured ? -1 : 1
 
@@ -956,17 +958,6 @@ export default function HomePage() {
     // fallback so 'closest' is still meaningful when GPS is denied.
     const aDist = a.distance ?? a.exits?.mile_marker ?? Number.POSITIVE_INFINITY
     const bDist = b.distance ?? b.exits?.mile_marker ?? Number.POSITIVE_INFINITY
-
-    // When slider is set ('Within X mi'), sort by absolute distance FROM
-    // that target — closest-to-target rises to top. So slider at 500 puts
-    // hotels around 500 mi at the top of the list, not 0 mi hotels.
-    // When slider is 'Anywhere' (>= 1000), pure closest-first sort.
-    if (targetDistance < 1000) {
-      const aDelta = Math.abs(Number(aDist) - targetDistance)
-      const bDelta = Math.abs(Number(bDist) - targetDistance)
-      if (aDelta === bDelta) return 0
-      return aDelta - bDelta
-    }
 
     if (aDist === bDist) return 0
     return Number(aDist) - Number(bDist)
@@ -1265,9 +1256,7 @@ export default function HomePage() {
           </span>
           {!loading && filtered.length > 0 && (
             <span style={{ fontStyle: 'italic', color: 'var(--mist)', fontSize: '12px' }}>
-              {targetDistance >= 1000
-                ? '📍 Closest shows first'
-                : `📍 Near ${targetDistance} mi shows first`}
+              📍 Closest shows first
             </span>
           )}
         </div>
