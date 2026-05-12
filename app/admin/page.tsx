@@ -47,6 +47,12 @@ function AdminPageContent() {
   // glance how much call volume each property is pulling from the app.
   // Pairs with boostCalls so admin can compare organic vs boost-attributed.
   const [hotelCallTotals, setHotelCallTotals] = useState<Record<string, number>>({})
+  // Authoritative from_boost call count per hotel (uses the from_boost column
+  // on call_logs, not the boost-window timestamp join). More accurate when
+  // a hotel has been boosted multiple times.
+  const [fromBoostCounts, setFromBoostCounts] = useState<Record<string, number>>({})
+  // GPS-verified arrivals per hotel — strongest boost conversion signal.
+  const [arrivalCounts, setArrivalCounts] = useState<Record<string, number>>({})
   const [form, setForm] = useState({ ...emptyHotel })
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -107,9 +113,10 @@ function AdminPageContent() {
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker').range(0, 4999),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
-      // Pull hotel_id + called_at too so we can compute boost-window calls
-      // per hotel below. hotelier_id stays so the Hoteliers tab works.
-      supabase.from('call_logs').select('hotel_id, hotelier_id, called_at'),
+      // Pull hotel_id + called_at + from_boost + arrival fields so we can
+      // compute boost attribution + GPS arrival stats globally and per-hotel.
+      // hotelier_id stays so the Hoteliers tab works.
+      supabase.from('call_logs').select('hotel_id, hotelier_id, called_at, from_boost, arrived_at, closest_approach_mi, initial_distance_mi'),
     ])
     const h = [...(hotelsOnly || []), ...(rvOnly || [])]
     if (h.length > 0) {
@@ -152,10 +159,29 @@ function AdminPageContent() {
       const bc: Record<string, { duringCurrent: number; lastBoost: number }> = {}
       // All-time totals — bumped once per call_log row regardless of boost.
       const totals: Record<string, number> = {}
+      // Per-hotel from_boost counts. Authoritative source of truth for
+      // boost attribution (the boost-window method above can miss calls
+      // if a hotel was boosted multiple times or if the boost window was
+      // reset). The from_boost column is set at insert time by the
+      // driver app, so it's accurate regardless of later boost edits.
+      const fromBoostCounts: Record<string, number> = {}
+      // GPS-verified arrivals — driver actually drove to within 0.25mi.
+      // The strongest possible signal a boost converted into a real visit.
+      const arrivalCounts: Record<string, number> = {}
       for (const c of cl) {
-        if (c.hotel_id) totals[c.hotel_id] = (totals[c.hotel_id] || 0) + 1
+        if (c.hotel_id) {
+          totals[c.hotel_id] = (totals[c.hotel_id] || 0) + 1
+          if (c.from_boost === true) {
+            fromBoostCounts[c.hotel_id] = (fromBoostCounts[c.hotel_id] || 0) + 1
+          }
+          if (c.arrived_at) {
+            arrivalCounts[c.hotel_id] = (arrivalCounts[c.hotel_id] || 0) + 1
+          }
+        }
       }
       setHotelCallTotals(totals)
+      setFromBoostCounts(fromBoostCounts)
+      setArrivalCounts(arrivalCounts)
       if (h) {
         for (const hotel of h) {
           if (!hotel.boost_started_at || !hotel.boost_ends_at) continue
@@ -338,14 +364,16 @@ function AdminPageContent() {
         </h1>
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '16px' }}>Manage hotels, interstates, and exits</p>
 
-        {/* App-wide call totals — sums of every call_log row, then the
-            subset attributed to a boost window. Sits up top so admin sees
-            global volume the moment the page loads, before drilling into
-            any specific hotel. The third number (organic) is a derived
-            convenience: total minus boost. */}
+        {/* App-wide call totals — sums of every call_log row, plus the
+            subset attributed to boost (via from_boost column, authoritative
+            per-tap), plus GPS-verified arrivals (driver tapped Call AND
+            drove to within 0.25mi of the hotel — strongest conversion
+            signal). The fourth number is the organic remainder for
+            quick gut-check. */}
         {(() => {
           const totalAll = Object.values(hotelCallTotals).reduce((s, n) => s + n, 0)
-          const totalBoost = Object.values(boostCalls).reduce((s, b) => s + b.lastBoost, 0)
+          const totalBoost = Object.values(fromBoostCounts).reduce((s, n) => s + n, 0)
+          const totalArrivals = Object.values(arrivalCounts).reduce((s, n) => s + n, 0)
           const organic = Math.max(0, totalAll - totalBoost)
           const stat = (label: string, val: number, color: string, hint: string) => (
             <div style={{
@@ -361,8 +389,9 @@ function AdminPageContent() {
           return (
             <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', flexWrap: 'wrap' }}>
               {stat('Total Calls', totalAll, '#63b3ed', 'all-time, every hotel')}
-              {stat('Boost Calls', totalBoost, 'var(--amber)', 'within boost windows')}
-              {stat('Organic Calls', organic, '#22c55e', 'outside boost windows')}
+              {stat('Boost Calls', totalBoost, 'var(--amber)', 'tapped Call on a boosted listing')}
+              {stat('📍 GPS Arrivals', totalArrivals, '#22c55e', 'driver drove within 0.25mi')}
+              {stat('Organic Calls', organic, '#9ca3af', 'no boost active at tap time')}
             </div>
           )
         })()}
@@ -894,6 +923,28 @@ function AdminPageContent() {
                                     border: '1px solid rgba(245,166,35,0.30)',
                                   }}>
                                   ⭐ {n} boost call{n === 1 ? '' : 's'} ({label})
+                                </span>
+                              )
+                            })()}
+                            {/* GPS-verified arrivals pill. Renders only when
+                                this hotel has had at least one arrival —
+                                i.e. a driver tapped Call on a boosted listing
+                                AND drove to within 0.25mi of the hotel. The
+                                strongest possible boost-conversion signal,
+                                hence the bright green color. */}
+                            {(arrivalCounts[h.id] || 0) > 0 && (() => {
+                              const n = arrivalCounts[h.id]
+                              return (
+                                <span
+                                  title="Drivers who tapped Call on a boost AND drove to within 0.25 mi of this hotel (GPS-verified)."
+                                  style={{
+                                    fontSize: '10px',
+                                    background: 'rgba(34,197,94,0.12)',
+                                    color: '#22c55e',
+                                    padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                    border: '1px solid rgba(34,197,94,0.30)',
+                                  }}>
+                                  📍 {n} arrival{n === 1 ? '' : 's'}
                                 </span>
                               )
                             })()}
