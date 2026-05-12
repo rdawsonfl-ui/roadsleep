@@ -12,6 +12,11 @@ type HotelWithStats = {
   calls_this_month: number
   calls_last_month: number
   calls_all_time: number
+  // Boost attribution: how many of the calls came in while the hotel
+  // was actively boosted (driver tapped Call on a boosted listing).
+  // Lets hoteliers see whether their boost spend converted.
+  boost_calls_today: number
+  boost_calls_this_month: number
   revenue_today: number
   revenue_this_month: number
   revenue_last_month: number
@@ -32,7 +37,11 @@ export default function HotelierDashboard() {
     const { data: hotelsData } = await supabase.from('hotels').select('id, name, phone, featured, est_revenue_per_call')
     if (!hotelsData) { setLoading(false); return }
 
-    const { data: calls } = await supabase.from('call_logs').select('hotel_id, called_at')
+    // Include from_boost so the dashboard can attribute calls to boosts.
+    // Column was added later — older rows have NULL/false and count as
+    // organic, which is correct (they couldn't have come from a boost
+    // that didn't yet have attribution).
+    const { data: calls } = await supabase.from('call_logs').select('hotel_id, called_at, from_boost')
     const callList = calls || []
 
     const now = new Date()
@@ -53,11 +62,18 @@ export default function HotelierDashboard() {
         return d >= lastMonthStart && d <= lastMonthEnd
       }).length
       const all = hCalls.length
+      // Boost-attributed subsets — same windows but filtered to calls
+      // where the driver came in via a boost. from_boost is nullable;
+      // treat null/false as organic.
+      const boostToday = hCalls.filter(c => c.from_boost === true && new Date(c.called_at) >= todayStart).length
+      const boostThisMonth = hCalls.filter(c => c.from_boost === true && new Date(c.called_at) >= monthStart).length
       const projected = dayOfMonth > 0 ? Math.round((thisMonth / dayOfMonth) * daysInMonth) : 0
       return {
         ...h,
         calls_today: today, calls_this_month: thisMonth,
         calls_last_month: lastMonth, calls_all_time: all,
+        boost_calls_today: boostToday,
+        boost_calls_this_month: boostThisMonth,
         revenue_today: today * rate,
         revenue_this_month: thisMonth * rate,
         revenue_last_month: lastMonth * rate,
@@ -163,6 +179,31 @@ export default function HotelierDashboard() {
                     <MiniStat label="Projected" value={`${selected.calls_this_month > 0 ? Math.round(selected.projected_monthly / selected.est_revenue_per_call) : 0}`} revenue={selected.projected_monthly} projection/>
                     <MiniStat label="All Time" value={`${selected.calls_all_time}`} revenue={selected.calls_all_time * selected.est_revenue_per_call}/>
                   </div>
+                  {/* Boost attribution. Only render when this hotel has any
+                      boost-attributed calls so far — keeps the dashboard
+                      clean for hotels that have never boosted. The point of
+                      this row is to tell the hotelier "X of your Y calls
+                      today came in via a boost" — concrete ROI signal. */}
+                  {(selected.boost_calls_today > 0 || selected.boost_calls_this_month > 0) && (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px 14px',
+                      background: 'rgba(245,166,35,0.08)',
+                      border: '1px solid rgba(245,166,35,0.25)',
+                      borderRadius: '10px',
+                      fontSize: '13px',
+                      color: 'var(--white)',
+                    }}>
+                      <span style={{ color: 'var(--amber)', fontWeight: 700 }}>★ Boost attribution:</span>
+                      {' '}
+                      <span>{selected.boost_calls_today} call{selected.boost_calls_today === 1 ? '' : 's'} today</span>
+                      {' · '}
+                      <span>{selected.boost_calls_this_month} this month</span>
+                      <span style={{ color: 'var(--fog)', marginLeft: '8px' }}>
+                        (driver tapped Call while you were boosted)
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* 30-day chart */}

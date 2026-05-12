@@ -134,19 +134,48 @@ function bearingToDirection(bearing: number, axis: 'NS' | 'EW'): 'N' | 'S' | 'E'
   return bearing < 180 ? 'E' : 'W'
 }
 
-async function logCall(hotelId: string) {
+async function logCall(hotelId: string, fromBoost: boolean = false) {
   try {
     await supabase.from('call_logs').insert({
       hotel_id: hotelId,
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+      // Mark the call when the driver tapped a currently-boosted listing.
+      // Hoteliers can then see, on their dashboard, how many of today's
+      // calls were attributable to the boost vs. organic placement.
+      // Column is nullable for backwards compatibility with rows logged
+      // before this column existed.
+      from_boost: fromBoost,
     })
   } catch (e) {
     console.error('call log failed', e)
   }
 }
 
+// Short human-readable confirmation code for boost rates that drivers
+// show at the front desk. 6 chars, no ambiguous glyphs (no O/0/I/1).
+// Format: RS-XXXX so it's clearly from RoadSleep when seen on a screen.
+// Not cryptographically unique; collisions don't matter — the code is
+// just visual proof the driver got the rate via the app, not via
+// random typing. The desk clerk reads it, sees "RS-..." prefix, and
+// honors the boost price.
+function generateBoostCode(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let s = ''
+  for (let i = 0; i < 4; i++) {
+    s += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return `RS-${s}`
+}
+
 export default function HomePage() {
   const [hotels, setHotels] = useState<Hotel[]>([])
+  // When a driver taps Call on a currently-boosted hotel, we pause briefly
+  // to show them the boost rate + a confirmation code they can show at
+  // the front desk. The modal isn't a hard block — driver can tap Call
+  // again to actually dial, or screenshot the screen and call later.
+  // null = no modal open. Holds the Hotel + the generated code so the
+  // code stays stable while the modal is up.
+  const [boostRateModal, setBoostRateModal] = useState<{ hotel: Hotel; code: string } | null>(null)
   const [loading, setLoading] = useState(true)
   // NOTE: a max-price slider used to live here. Pulled because the price
   // data we have on hotels is not consistently up-to-date — filtering on
@@ -866,7 +895,29 @@ export default function HomePage() {
     const axis = INTERSTATE_AXIS[selectedInterstate]
     const REARVIEW_MI = 2  // how far behind we still show a passed hotel
 
-    filtered = filtered.filter((h) => {
+    // Sanity: if the driver is hundreds of miles from the selected
+    // interstate (e.g. tapped I-10 while standing in upstate NY), the
+    // direction filter makes no sense — every I-10 hotel is "south" of
+    // the driver, so Northbound shows zero. Detect this by checking
+    // whether ANY hotel on this corridor is within 50 mi. If not, the
+    // driver is browsing, not actually traveling on this road — skip
+    // the direction filter entirely and let them see the corridor's
+    // hotels sorted by distance.
+    const anyHotelClose = filtered.some(h => h.distance != null && h.distance < 50)
+
+    if (anyHotelClose) filtered = filtered.filter((h) => {
+      // BOOST BYPASS: a hotelier paying for a boost gets visibility on
+      // their own corridor regardless of direction or rearview position.
+      // The boost is paid placement; the driver should always see it
+      // when filtering to that interstate, even if they've already
+      // driven past the boosted hotel. Without this bypass a hotelier
+      // who boosts at 3pm would get nothing from a driver who's already
+      // 5 mi past their exit. The corridor (selectedInterstate) filter
+      // still applies — a boost on I-10 doesn't show to a driver on I-87.
+      if (h.featured && h.boost_ends_at && new Date(h.boost_ends_at).getTime() > Date.now()) {
+        return true
+      }
+
       const lat = h.latitude ?? h.exits?.lat
       const lng = h.longitude ?? h.exits?.lng
       const hMM = h.exits?.mile_marker
@@ -1411,30 +1462,71 @@ export default function HomePage() {
                   target on mobile. Go opens directions immediately — no
                   more confirmation modal. */}
               <div style={{ display: 'flex', gap: '10px' }}>
-                <a
-                  href={`tel:${h.phone || ''}`}
-                  onClick={() => logCall(h.id)}
-                  aria-label={`Call ${h.name}`}
-                  style={{
-                    flex: 2,                          // ~67% of row
-                    height: '56px',
-                    background: '#FF6A00',
-                    color: '#FFFFFF',
-                    borderRadius: '12px',
-                    padding: '0 16px',
-                    fontSize: '18px',
-                    fontWeight: 600,
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
-                  <span>Call</span>
-                </a>
+                {(() => {
+                  // Currently-boosted hotels intercept Call to show the rate
+                  // modal first. Driver sees the discounted price + code,
+                  // taps Call inside the modal to actually dial. The modal
+                  // is the "proof to bring to the front desk" — driver can
+                  // screenshot it or take a photo of the code. Logging the
+                  // call (with from_boost=true) happens at the modal's
+                  // confirm step, not here, so we don't double-log.
+                  const isBoosted = h.featured && h.boost_ends_at &&
+                    new Date(h.boost_ends_at).getTime() > Date.now()
+                  if (isBoosted) {
+                    return (
+                      <button
+                        onClick={() => setBoostRateModal({ hotel: h, code: generateBoostCode() })}
+                        aria-label={`Show boost rate for ${h.name}`}
+                        style={{
+                          flex: 2,
+                          height: '56px',
+                          background: '#FF6A00',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '12px',
+                          padding: '0 16px',
+                          fontSize: '18px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
+                        <span>Call</span>
+                      </button>
+                    )
+                  }
+                  return (
+                    <a
+                      href={`tel:${h.phone || ''}`}
+                      onClick={() => logCall(h.id, false)}
+                      aria-label={`Call ${h.name}`}
+                      style={{
+                        flex: 2,
+                        height: '56px',
+                        background: '#FF6A00',
+                        color: '#FFFFFF',
+                        borderRadius: '12px',
+                        padding: '0 16px',
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
+                      <span>Call</span>
+                    </a>
+                  )
+                })()}
                 <a
                   href={directionsUrl(h, userLoc)}
                   aria-label={`Directions to ${h.name}`}
@@ -1475,6 +1567,129 @@ export default function HomePage() {
       {/* (Directions confirmation modal removed per spec — Go button now
           opens Maps directly. Edge case of accidental tap is handled by
           Safari's back arrow returning the driver to the listing.) */}
+
+      {/* Boost-rate confirmation modal. Triggered when a driver taps Call
+          on a currently-boosted hotel. Shows the discounted nightly rate
+          plus a short confirmation code the driver presents at the front
+          desk. The "Call now" button inside is what actually dials AND
+          logs the call (with from_boost=true). Backdrop click or × closes
+          without calling. The modal is the entire UX of the "proof you
+          got the boost rate" feature — drivers can screenshot it, or
+          just read the code off the screen at the desk. SMS-delivery
+          is a later upgrade; for now the screen IS the receipt. */}
+      {boostRateModal && (() => {
+        const h = boostRateModal.hotel
+        const code = boostRateModal.code
+        return (
+          <div
+            onClick={() => setBoostRateModal(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 1000,
+              background: 'rgba(0,0,0,0.75)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px',
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--night)', borderRadius: '16px',
+                border: '2px solid var(--amber)',
+                maxWidth: '420px', width: '100%',
+                padding: '24px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                <span style={{
+                  fontSize: '11px', background: 'rgba(245,166,35,0.15)',
+                  color: 'var(--amber)', padding: '4px 10px', borderRadius: '4px',
+                  fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                }}>★ Boost Rate</span>
+                <button
+                  onClick={() => setBoostRateModal(null)}
+                  aria-label="Close"
+                  style={{
+                    background: 'transparent', border: 'none', color: 'var(--fog)',
+                    fontSize: '24px', cursor: 'pointer', lineHeight: 1, padding: 0,
+                    fontFamily: 'inherit',
+                  }}
+                >×</button>
+              </div>
+              <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px', color: 'var(--white)' }}>
+                {h.name}
+              </h2>
+              <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '20px' }}>
+                Show this to the front desk
+              </p>
+
+              {/* The rate. Large and unmistakable. */}
+              <div style={{
+                background: 'var(--night2)', borderRadius: '12px',
+                padding: '20px', marginBottom: '16px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '12px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>
+                  Tonight
+                </div>
+                <div style={{ fontSize: '48px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
+                  ${h.boost_price}
+                </div>
+                {h.price_min && h.boost_price && h.price_min > h.boost_price && (
+                  <div style={{ fontSize: '14px', color: 'var(--fog)', marginTop: '4px', textDecoration: 'line-through' }}>
+                    normally ${h.price_min}
+                  </div>
+                )}
+              </div>
+
+              {/* The code. Big, readable, copy-button-style. */}
+              <div style={{
+                background: 'var(--night2)', borderRadius: '12px',
+                padding: '16px', marginBottom: '20px', textAlign: 'center',
+                border: '1px dashed var(--border)',
+              }}>
+                <div style={{ fontSize: '11px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>
+                  Confirmation
+                </div>
+                <div style={{
+                  fontSize: '32px', fontWeight: 700, color: 'var(--white)',
+                  letterSpacing: '0.15em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                }}>
+                  {code}
+                </div>
+              </div>
+
+              {/* Action: tap to call. This is what actually dials AND
+                  logs the call. The href is a tel: link; onClick fires
+                  before navigation so the call_logs row gets written. */}
+              <a
+                href={`tel:${h.phone || ''}`}
+                onClick={() => {
+                  logCall(h.id, true)
+                  // Don't close immediately — let driver come back from
+                  // the dialer and still see the code at the desk.
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  height: '56px', background: '#FF6A00', color: '#FFFFFF',
+                  borderRadius: '12px', textDecoration: 'none',
+                  fontSize: '18px', fontWeight: 600, gap: '8px',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
+                <span>Call {h.phone || 'front desk'}</span>
+              </a>
+
+              <p style={{
+                fontSize: '12px', color: 'var(--fog)', marginTop: '12px',
+                textAlign: 'center', lineHeight: 1.4,
+              }}>
+                Screenshot this screen so you can show the code at the desk.
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
       <SiteFooter />
     </main>
   )
