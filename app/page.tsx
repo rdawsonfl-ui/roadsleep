@@ -651,6 +651,59 @@ export default function HomePage() {
     return bestMM
   }, [userLoc, selectedInterstate, hotels])
 
+  // Which way does mile_marker increase along this interstate's data?
+  //
+  // We can't assume MM follows the federal milepost convention (which
+  // increases north on NS routes, east on EW). Our DB has at least one
+  // corridor (I-87) where the stored MMs increase SOUTHWARD: Queensbury
+  // (Albany end) = MM 285, while Westport (north end) = MM 281. So a
+  // northbound driver in Glens Falls would have hotels "ahead" with
+  // LOWER MMs, not higher — opposite of the federal convention.
+  //
+  // Fix: derive the MM-direction relationship empirically per interstate.
+  // For an NS corridor we ask: does mile_marker correlate positively or
+  // negatively with latitude across this corridor's exits? Positive
+  // correlation = MM grows northward (federal). Negative = MM grows
+  // southward (our I-87 data).
+  //
+  // The signed direction filter then becomes:
+  //   driver going N + MM grows N  -> ahead = hotelMM > userMM
+  //   driver going N + MM grows S  -> ahead = hotelMM < userMM
+  //   driver going S + MM grows N  -> ahead = hotelMM < userMM
+  //   driver going S + MM grows S  -> ahead = hotelMM > userMM
+  // Same idea with lng for EW corridors.
+  //
+  // Returns +1 if MM increases with lat/lng (federal-style), -1 if it
+  // decreases. Null if we have too few data points to decide.
+  const mmAxisSign: 1 | -1 | null = useMemo(() => {
+    if (!selectedInterstate) return null
+    const axis = INTERSTATE_AXIS[selectedInterstate]
+    // Collect (positional, mm) pairs from exits on this corridor
+    const pairs: Array<{ pos: number; mm: number }> = []
+    for (const h of hotels) {
+      const iname = h.exits?.interstates?.name
+      if (iname !== selectedInterstate) continue
+      const lat = h.exits?.lat
+      const lng = h.exits?.lng
+      const mm = h.exits?.mile_marker
+      if (lat == null || lng == null || mm == null) continue
+      const pos = axis === 'NS' ? Number(lat) : Number(lng)
+      pairs.push({ pos, mm: Number(mm) })
+    }
+    if (pairs.length < 3) return null  // not enough to be confident
+
+    // Quick sign-of-correlation check: compare extremes. Find the exit
+    // with the lowest pos value and the one with the highest. If MM at
+    // high-pos > MM at low-pos, MM increases with pos (sign = +1).
+    let lowestPos = pairs[0], highestPos = pairs[0]
+    for (const p of pairs) {
+      if (p.pos < lowestPos.pos) lowestPos = p
+      if (p.pos > highestPos.pos) highestPos = p
+    }
+    if (lowestPos.mm === highestPos.mm) return null
+    return highestPos.mm > lowestPos.mm ? 1 : -1
+  }, [selectedInterstate, hotels])
+
   // Direction the filter should treat as "ahead." Manual tap wins; else
   // we use what GPS bearing inferred. Null = no direction known, filter
   // is permissive (shows both ways).
@@ -820,11 +873,27 @@ export default function HomePage() {
       if (lat == null || lng == null) return false
 
       // MM path — preferred when we know both the driver's MM and the
-      // hotel's MM. Signed delta in the direction of travel:
-      //   NB/EB: ahead = hMM - userMM  (positive = ahead, negative = passed)
-      //   SB/WB: ahead = userMM - hMM
-      if (userMM != null && hMM != null) {
-        const signed = (effectiveDirection === 'N' || effectiveDirection === 'E')
+      // hotel's MM, AND we know which way MMs run on this corridor.
+      // Signed delta in the direction of travel:
+      //   When MM grows in the driver's direction:    signed =  hMM - userMM
+      //   When MM grows opposite the driver's direction: signed =  userMM - hMM
+      //
+      // mmGrowsCardinal: does MM increase going north/east on this corridor?
+      //   axis NS + sign +1 -> MM grows N (federal style)
+      //   axis NS + sign -1 -> MM grows S (our I-87 data)
+      //   axis EW + sign +1 -> MM grows E
+      //   axis EW + sign -1 -> MM grows W
+      // Driver going N: ahead means hotel is north of driver.
+      //   if MM grows N -> ahead has higher MM -> signed =  hMM - userMM
+      //   if MM grows S -> ahead has lower MM  -> signed =  userMM - hMM
+      if (userMM != null && hMM != null && mmAxisSign != null) {
+        const driverGoesPositive = effectiveDirection === 'N' || effectiveDirection === 'E'
+        // mmAxisSign tells us which cardinal MM grows toward (within the
+        // corridor's axis). If MM grows toward the same cardinal the driver
+        // is going, ahead = higher MM. Otherwise ahead = lower MM.
+        const mmGrowsWithDriver = (driverGoesPositive && mmAxisSign === 1)
+                                || (!driverGoesPositive && mmAxisSign === -1)
+        const signed = mmGrowsWithDriver
           ? Number(hMM) - userMM
           : userMM - Number(hMM)
         return signed >= -REARVIEW_MI
