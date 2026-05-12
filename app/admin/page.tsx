@@ -773,16 +773,43 @@ function AdminPageContent() {
                 <div>
                   {/* Search box — filters listings client-side. Searches across name,
                       city, state, full address, and phone so the admin can find a row
-                      however they remember it ("lake george", "wifi", "518-792"). */}
-                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                      however they remember it ("lake george", "wifi", "518-792"). 
+                      Distinct amber-tinted background + bold label so it stands out
+                      from the dark form inputs above. */}
+                  <div style={{
+                    padding: '14px 16px',
+                    borderBottom: '1px solid var(--border)',
+                    background: 'rgba(245,166,35,0.06)',
+                  }}>
+                    <label style={{
+                      display: 'block',
+                      fontSize: '11px',
+                      color: 'var(--amber)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.1em',
+                      fontWeight: 700,
+                      marginBottom: '6px',
+                    }}>
+                      🔍 Search Listings
+                    </label>
                     <input
                       type="text"
                       value={listingSearch}
                       onChange={(e) => setListingSearch(e.target.value)}
                       placeholder="Search by name, city, state, address, or phone…"
-                      className="dark-input"
                       autoComplete="off"
                       spellCheck={false}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        fontSize: '15px',
+                        background: 'var(--white)',
+                        color: 'var(--night)',
+                        border: '2px solid var(--amber)',
+                        borderRadius: '8px',
+                        outline: 'none',
+                        fontFamily: 'inherit',
+                      }}
                     />
                     {listingSearch.trim() !== '' && (() => {
                       const q = listingSearch.trim().toLowerCase()
