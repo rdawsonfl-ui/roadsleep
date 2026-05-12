@@ -57,16 +57,41 @@ function composeAddress(h: Hotel): string {
   return h.address?.trim() || ''
 }
 
-function directionsUrl(h: Hotel): string {
+// Build a Google Maps URL that LAUNCHES TURN-BY-TURN NAVIGATION immediately
+// (with voice prompts), not the preview-with-Start-button page.
+//
+// The key params:
+//   dir_action=navigate     -> skip the route preview, go straight to
+//                              voice-guided turn-by-turn. Without this,
+//                              Maps loads the route but stays silent
+//                              until the driver taps a Start button.
+//   travelmode=driving      -> lock the mode. Otherwise Maps occasionally
+//                              defaults to whatever the user last used
+//                              (transit/walking) which is wrong here.
+//   origin=lat,lng          -> driver's current GPS, when we have it.
+//                              Skips the "set starting point" interstitial
+//                              that sometimes shows when device location
+//                              isn't immediately available to Maps.
+//
+// On iOS, Google Maps must be installed for these params to do anything;
+// if it isn't, the browser opens maps.google.com which works similarly
+// but voice guidance requires the app. Apple Maps does its own thing
+// from a separate URL scheme — not handled here. Most drivers have
+// Google Maps installed; we'll add Apple Maps fallback later if needed.
+function directionsUrl(h: Hotel, origin?: { lat: number; lng: number } | null): string {
   const lat = h.latitude ?? h.exits?.lat
   const lng = h.longitude ?? h.exits?.lng
+  const base = 'https://www.google.com/maps/dir/?api=1&travelmode=driving&dir_action=navigate'
+  const originParam = origin ? `&origin=${origin.lat},${origin.lng}` : ''
   if (lat && lng) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+    return `${base}${originParam}&destination=${lat},${lng}`
   }
   const addr = composeAddress(h)
   if (addr) {
-    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`
+    return `${base}${originParam}&destination=${encodeURIComponent(addr)}`
   }
+  // Last-resort fallback: hotel name search. No turn-by-turn possible
+  // without a real destination, so we drop the navigate action here.
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(h.name)}`
 }
 
@@ -1318,7 +1343,7 @@ export default function HomePage() {
                   <span>Call</span>
                 </a>
                 <a
-                  href={directionsUrl(h)}
+                  href={directionsUrl(h, userLoc)}
                   aria-label={`Directions to ${h.name}`}
                   style={{
                     flex: 1,                          // ~33% of row
