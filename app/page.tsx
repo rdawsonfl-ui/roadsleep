@@ -1618,7 +1618,7 @@ export default function HomePage() {
               <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px', color: 'var(--white)' }}>
                 {h.name}
               </h2>
-              <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '20px' }}>
+              <p style={{ fontSize: '16px', color: 'var(--white)', marginBottom: '20px', fontWeight: 500 }}>
                 Show this to the front desk
               </p>
 
@@ -1627,7 +1627,7 @@ export default function HomePage() {
                 background: 'var(--night2)', borderRadius: '12px',
                 padding: '20px', marginBottom: '16px', textAlign: 'center',
               }}>
-                <div style={{ fontSize: '12px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>
+                <div style={{ fontSize: '14px', color: 'var(--white)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 600 }}>
                   Tonight
                 </div>
                 <div style={{ fontSize: '48px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
@@ -1646,11 +1646,11 @@ export default function HomePage() {
                 padding: '16px', marginBottom: '20px', textAlign: 'center',
                 border: '1px dashed var(--border)',
               }}>
-                <div style={{ fontSize: '11px', color: 'var(--fog)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px' }}>
+                <div style={{ fontSize: '14px', color: 'var(--white)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
                   Confirmation
                 </div>
                 <div style={{
-                  fontSize: '32px', fontWeight: 700, color: 'var(--white)',
+                  fontSize: '40px', fontWeight: 700, color: 'var(--white)',
                   letterSpacing: '0.15em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 }}>
                   {code}
@@ -1680,10 +1680,13 @@ export default function HomePage() {
               </a>
 
               <p style={{
-                fontSize: '12px', color: 'var(--fog)', marginTop: '12px',
-                textAlign: 'center', lineHeight: 1.4,
+                fontSize: '15px', color: 'var(--white)', marginTop: '16px',
+                textAlign: 'center', lineHeight: 1.4, fontWeight: 500,
               }}>
-                Screenshot this screen so you can show the code at the desk.
+                📸 Screenshot this screen<br/>
+                <span style={{ color: 'var(--fog)', fontSize: '13px', fontWeight: 400 }}>
+                  Show the code at the front desk
+                </span>
               </p>
             </div>
           </div>
