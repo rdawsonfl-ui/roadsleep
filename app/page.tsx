@@ -693,6 +693,21 @@ export default function HomePage() {
 
   // Intersection-based pill filter (overrides nearbyInterstateSet when active).
   //
+  // Why it exists: the route the driver is currently ON should not show
+  // every nearby corridor — only the ones that ACTUALLY CROSS their
+  // selected one within reach. A driver on I-87 in upstate NY doesn't
+  // need I-95 on the pill row unless they're close enough to actually
+  // hit the I-87 ↔ I-95 interchange (Bronx, ~190 mi south).
+  //
+  // Distance threshold for this filter uses the slider value DIRECTLY
+  // (no 200-mi floor like nearbyInterstateSet has). The nearby filter's
+  // floor is there to keep "what corridors exist near me" stable as the
+  // slider zooms tight; this filter is a different question — "what
+  // intersections are within my planned trip range" — and for that the
+  // slider IS the answer. Slider at 25 mi -> only show crossing corridors
+  // whose interchange is within 25 mi. Slider at 1000 / Anywhere -> show
+  // all crossing corridors.
+  const INTERSECTION_RADIUS_MI = targetDistance >= 1000 ? Number.POSITIVE_INFINITY : targetDistance
   // Trigger: driver has selected a corridor (selectedInterstate is set) and
   // GPS resolved. In that mode, the pill row should only show corridors the
   // driver could realistically reach — the selected corridor itself, plus
@@ -710,8 +725,8 @@ export default function HomePage() {
   // BOTH directions — driver's still scoping the trip.
   //
   // Distance: the intersection's anchor lat/lng vs the driver's GPS, in
-  // straight-line miles. Threshold = same NEARBY_INTERSTATE_RADIUS_MI as
-  // the nearby filter — keeps the slider authoritative for both layers.
+  // straight-line miles. Threshold = INTERSECTION_RADIUS_MI (slider value
+  // directly, no floor — see comment above).
   const intersectionInterstateSet: Set<string> | null = (() => {
     if (!selectedInterstate || !userLoc) return null
     const intersections = INTERSTATE_INTERSECTIONS[selectedInterstate]
@@ -721,7 +736,7 @@ export default function HomePage() {
     for (const [otherName, point] of Object.entries(intersections)) {
       // Distance to intersection from current GPS
       const d = milesBetween(userLoc.lat, userLoc.lng, point.lat, point.lng)
-      if (d > NEARBY_INTERSTATE_RADIUS_MI) continue
+      if (d > INTERSECTION_RADIUS_MI) continue
       // Direction check — uses effectiveDirection (manual tap OR auto from
       // GPS bearing) so the pill row stays consistent with the hotel list
       // even when the driver hasn't tapped N/S/E/W.
