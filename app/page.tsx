@@ -1137,11 +1137,7 @@ export default function HomePage() {
               value={targetDistance}
               onChange={e => setTargetDistance(parseInt(e.target.value))}
               aria-label="Target distance"
-              style={{
-                width: '100%',
-                accentColor: '#FF6A00',
-                cursor: 'pointer',
-              }}
+              className="distance-slider"
             />
             <div style={{
               display: 'flex',

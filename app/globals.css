@@ -46,6 +46,83 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
 .dark-input:focus { border-color: var(--amber); }
 .dark-input::placeholder { color: var(--steel); }
 
+/* Distance slider — driver-friendly touch target.
+ *
+ * Default <input type="range"> on iOS gives a ~20px thumb on a 2px track.
+ * That's painful on a small phone like the iPhone SE, especially while
+ * mounted in a car cradle where you're poking it with one thumb without
+ * looking. We replace it with:
+ *
+ *   - a 28px thumb (vs ~20px native) so there's something to grab
+ *   - a 16px-tall padded "hit area" around the thumb via box-shadow that
+ *     extends the visible touchable region without enlarging the visible
+ *     thumb — feels precise but forgives off-center taps
+ *   - a 6px track (vs ~2px native) so the slider reads visually as
+ *     something to interact with, not a hairline
+ *   - touch-action: manipulation to disable iOS double-tap-zoom on the
+ *     slider itself, which was causing phantom missed grabs when the
+ *     OS interpreted a tap-and-drag as the start of a zoom gesture
+ *   - taller .distance-slider-wrap row so vertical thumb misses (tapping
+ *     just above or below the track) still register as a slider hit
+ */
+.distance-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;                /* tall row -> generous vertical hit area */
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;  /* kill double-tap-zoom on the control */
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+/* Track — webkit (iOS Safari, Chrome) */
+.distance-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  background: var(--night4);
+  border-radius: 999px;
+}
+/* Track — Firefox */
+.distance-slider::-moz-range-track {
+  height: 6px;
+  background: var(--night4);
+  border-radius: 999px;
+}
+/* Thumb — webkit */
+.distance-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #FF6A00;
+  border: 2px solid #fff;
+  /* Pull the thumb up so it sits centered on the 6px track inside the
+   * 44px row. Track is rendered at vertical center of the row. */
+  margin-top: -11px;
+  /* Faux extra hit area — extends the *touchable* zone past the visible
+   * thumb without making the dot itself look chunky. Transparent ring. */
+  box-shadow: 0 0 0 8px rgba(255, 106, 0, 0.001);
+  cursor: pointer;
+}
+.distance-slider::-webkit-slider-thumb:active {
+  background: #ff8a33;
+  box-shadow: 0 0 0 10px rgba(255, 106, 0, 0.15);
+}
+/* Thumb — Firefox */
+.distance-slider::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #FF6A00;
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+.distance-slider::-moz-range-thumb:active {
+  background: #ff8a33;
+}
+
 .dark-label {
   display: block;
   font-size: 11px;
