@@ -53,6 +53,23 @@ function AdminPageContent() {
   const [fromBoostCounts, setFromBoostCounts] = useState<Record<string, number>>({})
   // GPS-verified arrivals per hotel — strongest boost conversion signal.
   const [arrivalCounts, setArrivalCounts] = useState<Record<string, number>>({})
+  // Modal: when admin clicks an arrival pill, we show a list of every
+  // call_log row attributed to this hotel that has GPS arrival data —
+  // boost-attributed taps that converted into actual drive-up visits.
+  // null = modal closed. Holds the hotel + a snapshot of the rows so
+  // we don't have to re-query on each render.
+  const [arrivalModal, setArrivalModal] = useState<{
+    hotel: { id: string; name: string };
+    rows: Array<{
+      id: string
+      called_at: string
+      from_boost: boolean
+      initial_distance_mi: number | null
+      closest_approach_mi: number | null
+      arrived_at: string | null
+      tracking_ended_at: string | null
+    }>
+  } | null>(null)
   const [form, setForm] = useState({ ...emptyHotel })
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -205,6 +222,35 @@ function AdminPageContent() {
   }
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 3000) }
+
+  // Opens the per-hotel arrivals modal. Fetches the full call_log rows
+  // for this hotel filtered to ones with GPS arrival data, so admin can
+  // see when each driver tapped, how far they were, and how close they
+  // got. Fresh fetch on each click so the data is current.
+  async function openArrivalDetails(hotelId: string, hotelName: string) {
+    const { data, error } = await supabase
+      .from('call_logs')
+      .select('id, called_at, from_boost, initial_distance_mi, closest_approach_mi, arrived_at, tracking_ended_at')
+      .eq('hotel_id', hotelId)
+      .not('closest_approach_mi', 'is', null)
+      .order('called_at', { ascending: false })
+    if (error) {
+      flash('Could not load arrival details')
+      return
+    }
+    setArrivalModal({
+      hotel: { id: hotelId, name: hotelName },
+      rows: (data || []).map(r => ({
+        id: r.id,
+        called_at: r.called_at,
+        from_boost: r.from_boost ?? false,
+        initial_distance_mi: r.initial_distance_mi != null ? Number(r.initial_distance_mi) : null,
+        closest_approach_mi: r.closest_approach_mi != null ? Number(r.closest_approach_mi) : null,
+        arrived_at: r.arrived_at,
+        tracking_ended_at: r.tracking_ended_at,
+      })),
+    })
+  }
 
   // saveHotel persists the form. When `alsoVerify` is true, we also stamp the
   // record as verified + last_verified_at in the SAME write — used by the
@@ -962,17 +1008,20 @@ function AdminPageContent() {
                             {(arrivalCounts[h.id] || 0) > 0 && (() => {
                               const n = arrivalCounts[h.id]
                               return (
-                                <span
-                                  title="Drivers who tapped Call on a boost AND drove to within 0.25 mi of this hotel (GPS-verified)."
+                                <button
+                                  onClick={() => openArrivalDetails(h.id, h.name)}
+                                  title="Click to see each arrival with timing + distance details."
                                   style={{
                                     fontSize: '10px',
                                     background: 'rgba(34,197,94,0.12)',
                                     color: '#22c55e',
                                     padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
                                     border: '1px solid rgba(34,197,94,0.30)',
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
                                   }}>
-                                  📍 {n} arrival{n === 1 ? '' : 's'}
-                                </span>
+                                  📍 {n} arrival{n === 1 ? '' : 's'} →
+                                </button>
                               )
                             })()}
                           </div>
@@ -1220,6 +1269,133 @@ function AdminPageContent() {
           </>
         )}
       </div>
+
+      {/* Per-hotel arrivals modal. Opens when admin clicks a hotel's
+          green 📍 arrivals pill. Lists each call_log row with GPS data:
+          when the driver tapped Call, how far they were, the closest
+          they got, and whether they hit the 0.25mi arrival threshold.
+          The modal IS the receipt for boost ROI claims — admin can
+          drill from 'this hotel paid for boost, said they got no
+          arrivals' down to the per-tap timeline. */}
+      {arrivalModal && (
+        <div
+          onClick={() => setArrivalModal(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.75)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--night)', borderRadius: '16px',
+              border: '1px solid var(--border)',
+              maxWidth: '700px', width: '100%',
+              maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{
+              padding: '20px 24px', borderBottom: '1px solid var(--border)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'start',
+            }}>
+              <div>
+                <div style={{
+                  fontSize: '11px', color: '#22c55e', textTransform: 'uppercase',
+                  letterSpacing: '0.1em', fontWeight: 700, marginBottom: '4px',
+                }}>
+                  📍 GPS-Verified Arrivals
+                </div>
+                <h2 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--white)' }}>
+                  {arrivalModal.hotel.name}
+                </h2>
+                <p style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '4px' }}>
+                  {arrivalModal.rows.length} call{arrivalModal.rows.length === 1 ? '' : 's'} with GPS tracking data
+                </p>
+              </div>
+              <button
+                onClick={() => setArrivalModal(null)}
+                aria-label="Close"
+                style={{
+                  background: 'transparent', border: 'none', color: 'var(--fog)',
+                  fontSize: '28px', cursor: 'pointer', lineHeight: 1, padding: 0,
+                  fontFamily: 'inherit',
+                }}
+              >×</button>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {arrivalModal.rows.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fog)' }}>
+                  No GPS tracking data yet.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--night2)', color: 'var(--fog)', textAlign: 'left' }}>
+                      <th style={{ padding: '10px 14px', fontWeight: 500, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tapped Call</th>
+                      <th style={{ padding: '10px 14px', fontWeight: 500, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Started</th>
+                      <th style={{ padding: '10px 14px', fontWeight: 500, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Closest</th>
+                      <th style={{ padding: '10px 14px', fontWeight: 500, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Arrived</th>
+                      <th style={{ padding: '10px 14px', fontWeight: 500, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {arrivalModal.rows.map(r => {
+                      const tapped = new Date(r.called_at)
+                      const arrived = r.arrived_at ? new Date(r.arrived_at) : null
+                      const minToArrival = arrived
+                        ? Math.round((arrived.getTime() - tapped.getTime()) / 60000)
+                        : null
+                      const isArrival = !!r.arrived_at
+                      return (
+                        <tr key={r.id} style={{ borderTop: '1px solid var(--border)', color: 'var(--white)' }}>
+                          <td style={{ padding: '12px 14px' }}>
+                            <div>{tapped.toLocaleDateString()}</div>
+                            <div style={{ color: 'var(--fog)', fontSize: '11px' }}>
+                              {tapped.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                              {r.from_boost && (
+                                <span style={{ color: 'var(--amber)', marginLeft: '6px' }}>★ boost</span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 14px' }}>
+                            {r.initial_distance_mi != null ? `${r.initial_distance_mi.toFixed(1)} mi` : '—'}
+                          </td>
+                          <td style={{ padding: '12px 14px', fontWeight: isArrival ? 700 : 400, color: isArrival ? '#22c55e' : 'var(--white)' }}>
+                            {r.closest_approach_mi != null ? `${r.closest_approach_mi.toFixed(2)} mi` : '—'}
+                          </td>
+                          <td style={{ padding: '12px 14px' }}>
+                            {isArrival ? (
+                              <span style={{ color: '#22c55e', fontWeight: 700 }}>✓ YES</span>
+                            ) : (
+                              <span style={{ color: 'var(--fog)' }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '12px 14px', color: 'var(--fog)' }}>
+                            {minToArrival != null ? `${minToArrival} min` : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div style={{
+              padding: '12px 24px', borderTop: '1px solid var(--border)',
+              fontSize: '11px', color: 'var(--fog)', lineHeight: 1.4,
+            }}>
+              <strong style={{ color: 'var(--white)' }}>How to read this:</strong>{' '}
+              "Started" is how far the driver was when they tapped Call.
+              "Closest" is the nearest GPS point we recorded. "Arrived" = YES
+              when closest dropped below 0.25mi. "Time" is minutes from tap
+              to arrival.
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
