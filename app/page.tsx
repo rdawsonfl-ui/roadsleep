@@ -1434,7 +1434,7 @@ export default function HomePage() {
                       fontSize: '18px', lineHeight: 1.1, textAlign: 'left',
                     }}>
                       <span style={{ fontSize: '24px', lineHeight: 1 }} aria-hidden="true">←</span>
-                      <span>Say "boost"<br/>for this price</span>
+                      <span>Limited time deal<br/>RoadSleep rate</span>
                     </div>
                   </div>
                 </div>
