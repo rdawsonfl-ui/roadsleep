@@ -1615,10 +1615,10 @@ export default function HomePage() {
                   }}
                 >×</button>
               </div>
-              <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '4px', color: 'var(--white)' }}>
+              <h2 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '4px', color: 'var(--white)' }}>
                 {h.name}
               </h2>
-              <p style={{ fontSize: '16px', color: 'var(--white)', marginBottom: '20px', fontWeight: 500 }}>
+              <p style={{ fontSize: '18px', color: 'var(--white)', marginBottom: '20px', fontWeight: 500 }}>
                 Your discounted boost rate
               </p>
 
@@ -1630,11 +1630,11 @@ export default function HomePage() {
                 <div style={{ fontSize: '14px', color: 'var(--white)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 600 }}>
                   Tonight
                 </div>
-                <div style={{ fontSize: '48px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
+                <div style={{ fontSize: '64px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
                   ${h.boost_price}
                 </div>
                 {h.price_min && h.boost_price && h.price_min > h.boost_price && (
-                  <div style={{ fontSize: '14px', color: 'var(--fog)', marginTop: '4px', textDecoration: 'line-through' }}>
+                  <div style={{ fontSize: '16px', color: 'var(--fog)', marginTop: '6px', textDecoration: 'line-through' }}>
                     normally ${h.price_min}
                   </div>
                 )}
@@ -1646,11 +1646,11 @@ export default function HomePage() {
                 padding: '16px', marginBottom: '20px', textAlign: 'center',
                 border: '1px dashed var(--border)',
               }}>
-                <div style={{ fontSize: '14px', color: 'var(--white)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '6px', fontWeight: 600 }}>
+                <div style={{ fontSize: '16px', color: 'var(--white)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px', fontWeight: 600 }}>
                   Confirmation
                 </div>
                 <div style={{
-                  fontSize: '40px', fontWeight: 700, color: 'var(--white)',
+                  fontSize: '48px', fontWeight: 700, color: 'var(--white)',
                   letterSpacing: '0.15em', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
                 }}>
                   {code}
@@ -1660,7 +1660,7 @@ export default function HomePage() {
                     need to capture. Larger and brighter than the old
                     secondary-text caption. */}
                 <p style={{
-                  fontSize: '15px', color: 'var(--white)', marginTop: '12px',
+                  fontSize: '17px', color: 'var(--white)', marginTop: '14px',
                   marginBottom: 0, lineHeight: 1.35, fontWeight: 500,
                 }}>
                   📸 Screenshot this screen<br/>to show at check-in
@@ -1679,13 +1679,13 @@ export default function HomePage() {
                 }}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  height: '56px', background: '#FF6A00', color: '#FFFFFF',
+                  height: '64px', background: '#FF6A00', color: '#FFFFFF',
                   borderRadius: '12px', textDecoration: 'none',
-                  fontSize: '18px', fontWeight: 600, gap: '8px',
+                  fontSize: '20px', fontWeight: 600, gap: '10px',
                   fontFamily: 'inherit',
                 }}
               >
-                <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
+                <span style={{ fontSize: '22px', lineHeight: 1 }} aria-hidden="true">📞</span>
                 <span>Call {h.phone || 'front desk'}</span>
               </a>
             </div>
