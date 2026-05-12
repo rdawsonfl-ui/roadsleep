@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/app/components/SiteFooter'
 import { getDrivingDistances } from '@/lib/mapbox'
@@ -79,6 +79,36 @@ function milesBetween(lat1: number, lng1: number, lat2: number, lng2: number): n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+// Compass bearing in degrees (0 = N, 90 = E, 180 = S, 270 = W) from
+// point 1 to point 2. Used to infer which way the driver is going by
+// comparing consecutive GPS fixes. Returns null if the points are
+// effectively the same (no meaningful heading to compute).
+function bearingDegrees(lat1: number, lng1: number, lat2: number, lng2: number): number | null {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const toDeg = (r: number) => (r * 180) / Math.PI
+  const dLng = toRad(lng2 - lng1)
+  const φ1 = toRad(lat1)
+  const φ2 = toRad(lat2)
+  const y = Math.sin(dLng) * Math.cos(φ2)
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLng)
+  if (Math.abs(y) < 1e-9 && Math.abs(x) < 1e-9) return null
+  return (toDeg(Math.atan2(y, x)) + 360) % 360
+}
+
+// Map a compass bearing to one of N/S/E/W based on whether the corridor
+// runs NS or EW. We snap to whichever cardinal the heading is closest to
+// on that axis — so a driver going 200° (slightly west of south) on an
+// NS corridor gets 'S', not 'W'. This makes the filter robust to highways
+// that curve (I-95 in NC, I-87 through the Adirondacks).
+function bearingToDirection(bearing: number, axis: 'NS' | 'EW'): 'N' | 'S' | 'E' | 'W' {
+  if (axis === 'NS') {
+    // bearing in [0, 90] or [270, 360] = north-ish; else south-ish
+    return (bearing < 90 || bearing > 270) ? 'N' : 'S'
+  }
+  // EW corridor: [0, 180] = east-ish (rising lng); [180, 360] = west-ish
+  return bearing < 180 ? 'E' : 'W'
+}
+
 async function logCall(hotelId: string) {
   try {
     await supabase.from('call_logs').insert({
@@ -133,6 +163,17 @@ export default function HomePage() {
   // GPS lat (for NS) or lng (for EW) to figure out which exits are
   // 'ahead' of the driver and hide the rest. Null = both directions.
   const [selectedDirection, setSelectedDirection] = useState<'N'|'S'|'E'|'W'|null>(null)
+  // Direction inferred from consecutive GPS fixes (compass bearing). Lets
+  // the ahead/behind filter work even when the driver hasn't tapped a
+  // direction button. Manual selectedDirection always wins when set —
+  // this is the fallback. Null until we have two fixes far enough apart
+  // to compute a stable heading.
+  const [inferredDirection, setInferredDirection] = useState<'N'|'S'|'E'|'W'|null>(null)
+  // Last GPS fix we used to compute heading. Tracked separately from
+  // userLoc so the heading calc only fires when the driver has moved
+  // far enough for the bearing to be meaningful (sub-100ft jitter would
+  // produce wildly unstable headings).
+  const lastHeadingFixRef = useRef<{ lat: number; lng: number } | null>(null)
 
   // Orientation map for our 6 corridors. Determines whether the direction
   // row shows NB/SB or EB/WB buttons. North-south = compares lat to
@@ -302,36 +343,100 @@ export default function HomePage() {
     })
   }, [userLoc])
 
+  // Infer travel direction from consecutive GPS fixes. We need at least
+  // ~0.25 mi of movement between fixes for the heading to be stable —
+  // shorter than that and GPS noise dominates the bearing. Once set, the
+  // value sticks until the driver moves another quarter mile, so brief
+  // stops or curves don't flip it. Manual N/S/E/W tap always overrides
+  // this; inferredDirection is the auto-fallback.
+  useEffect(() => {
+    if (!userLoc) return
+    const anchor = lastHeadingFixRef.current
+    if (!anchor) {
+      lastHeadingFixRef.current = userLoc
+      return
+    }
+    const moved = milesBetween(anchor.lat, anchor.lng, userLoc.lat, userLoc.lng)
+    if (moved < 0.25) return  // not enough movement to trust bearing
+    const bearing = bearingDegrees(anchor.lat, anchor.lng, userLoc.lat, userLoc.lng)
+    if (bearing == null) {
+      lastHeadingFixRef.current = userLoc
+      return
+    }
+    // Snap to the cardinal closest to bearing. We don't know the corridor
+    // axis here, so we pick globally and the filter will reconcile against
+    // the selected corridor's axis.
+    let dir: 'N' | 'S' | 'E' | 'W'
+    if (bearing >= 315 || bearing < 45) dir = 'N'
+    else if (bearing < 135) dir = 'E'
+    else if (bearing < 225) dir = 'S'
+    else dir = 'W'
+    setInferredDirection(dir)
+    lastHeadingFixRef.current = userLoc
+  }, [userLoc])
+
   // Auto-select the corridor the driver is closest to, so they don't have
-  // to figure out that the pills are interactive. Runs once when hotels +
-  // GPS first become available together. Picks the interstate that owns
-  // the single closest listing — almost always the road the driver is on.
+  // to figure out that the pills are interactive. Runs on first GPS fix,
+  // AND re-runs as the driver moves so a I-75 -> I-10 transition (or any
+  // other interstate-to-interstate handoff) is picked up automatically.
   //
-  // Subtlety: we deliberately key only on whether selectedInterstate is
-  // null, not on userLoc movement. Otherwise driving between corridors
-  // would flip the selection mid-trip — confusing if the driver is
-  // already looking at a list. Once auto-set (or once the driver taps a
-  // pill), we leave it alone for the session. Driver can clear & re-open
-  // for a new auto-pick if they take a new route.
+  // To avoid flipping the pill mid-trip from GPS noise or a parallel
+  // corridor briefly looking closer, the re-detection requires the new
+  // candidate's nearest exit to be at least 5 mi closer than the current
+  // selection's nearest exit. That's strict enough to ignore the case
+  // where I-95 and I-87 are within ~30 mi of each other near Albany,
+  // but loose enough to catch a real interstate switch (where the new
+  // road is right under the driver, ~0 mi, and the old road is now miles
+  // back).
+  //
+  // interstateUserTouched still wins — if the driver manually tapped a
+  // pill, never override.
   useEffect(() => {
     if (interstateUserTouched) return
-    if (selectedInterstate) return  // already auto-set this session
     if (!userLoc || hotels.length === 0) return
-    let bestIname: string | null = null
-    let bestDist = Number.POSITIVE_INFINITY
+
+    // Find the closest exit per interstate
+    const bestPerInterstate = new Map<string, number>()
     for (const h of hotels) {
       const lat = h.latitude ?? h.exits?.lat
       const lng = h.longitude ?? h.exits?.lng
       const iname = h.exits?.interstates?.name || h.near_interstate?.name
       if (lat == null || lng == null || !iname) continue
       const d = milesBetween(userLoc.lat, userLoc.lng, Number(lat), Number(lng))
+      const prev = bestPerInterstate.get(iname)
+      if (prev === undefined || d < prev) bestPerInterstate.set(iname, d)
+    }
+    if (bestPerInterstate.size === 0) return
+
+    // Pick the global best
+    let bestIname: string | null = null
+    let bestDist = Number.POSITIVE_INFINITY
+    bestPerInterstate.forEach((d, iname) => {
       if (d < bestDist) {
         bestDist = d
         bestIname = iname
       }
-    }
-    if (bestIname) {
+    })
+
+    if (!bestIname) return
+
+    // First-time auto-select (nothing currently chosen) — just pick.
+    if (!selectedInterstate) {
       setSelectedInterstate(bestIname)
+      return
+    }
+
+    // Already have a selection. Only switch if the new candidate is
+    // clearly closer (>= 5 mi gap). This prevents flapping between
+    // parallel corridors while still catching real route transitions.
+    if (bestIname === selectedInterstate) return
+    const currentDist = bestPerInterstate.get(selectedInterstate) ?? Number.POSITIVE_INFINITY
+    if (currentDist - bestDist >= 5) {
+      setSelectedInterstate(bestIname)
+      // Reset direction state too — bearing relative to a new road may
+      // imply a different cardinal. The next GPS update will re-infer.
+      setInferredDirection(null)
+      setSelectedDirection(null)
     }
   }, [hotels, userLoc, selectedInterstate, interstateUserTouched])
 
@@ -492,6 +597,40 @@ export default function HomePage() {
     return { ...h, distance: dist }
   })
 
+  // Driver's current mile marker on the selected interstate. We pick the
+  // closest exit on that interstate (any direction) by haversine and use
+  // its mile_marker. Exits are spaced every few miles, so this gives
+  // accuracy within ~half an exit gap — plenty for ahead/behind decisions.
+  // Null when GPS denied or no interstate selected.
+  const userMM: number | null = useMemo(() => {
+    if (!userLoc || !selectedInterstate) return null
+    let bestMM: number | null = null
+    let bestDist = Number.POSITIVE_INFINITY
+    for (const h of hotels) {
+      const iname = h.exits?.interstates?.name
+      if (iname !== selectedInterstate) continue
+      const lat = h.exits?.lat
+      const lng = h.exits?.lng
+      const mm = h.exits?.mile_marker
+      if (lat == null || lng == null || mm == null) continue
+      const d = milesBetween(userLoc.lat, userLoc.lng, Number(lat), Number(lng))
+      if (d < bestDist) {
+        bestDist = d
+        bestMM = Number(mm)
+      }
+    }
+    // Sanity: if the closest exit is more than 20 mi away, we're probably
+    // not actually on this interstate — return null and let the filter
+    // fall back to lat/lng comparison rather than emit garbage MMs.
+    if (bestDist > 20) return null
+    return bestMM
+  }, [userLoc, selectedInterstate, hotels])
+
+  // Direction the filter should treat as "ahead." Manual tap wins; else
+  // we use what GPS bearing inferred. Null = no direction known, filter
+  // is permissive (shows both ways).
+  const effectiveDirection: 'N' | 'S' | 'E' | 'W' | null = selectedDirection ?? inferredDirection
+
   let filtered = [...hotelsWithDistance]
 
   // GPS-based corridor filter — figure out which interstates have at least
@@ -558,14 +697,16 @@ export default function HomePage() {
       // Distance to intersection from current GPS
       const d = milesBetween(userLoc.lat, userLoc.lng, point.lat, point.lng)
       if (d > NEARBY_INTERSTATE_RADIUS_MI) continue
-      // Direction check — only enforced once the driver has picked NB/SB/EB/WB.
-      if (selectedDirection) {
+      // Direction check — uses effectiveDirection (manual tap OR auto from
+      // GPS bearing) so the pill row stays consistent with the hotel list
+      // even when the driver hasn't tapped N/S/E/W.
+      if (effectiveDirection) {
         if (axis === 'NS') {
-          if (selectedDirection === 'N' && point.lat <= userLoc.lat) continue
-          if (selectedDirection === 'S' && point.lat >= userLoc.lat) continue
+          if (effectiveDirection === 'N' && point.lat <= userLoc.lat) continue
+          if (effectiveDirection === 'S' && point.lat >= userLoc.lat) continue
         } else if (axis === 'EW') {
-          if (selectedDirection === 'E' && point.lng <= userLoc.lng) continue
-          if (selectedDirection === 'W' && point.lng >= userLoc.lng) continue
+          if (effectiveDirection === 'E' && point.lng <= userLoc.lng) continue
+          if (effectiveDirection === 'W' && point.lng >= userLoc.lng) continue
         }
       }
       s.add(otherName)
@@ -613,25 +754,54 @@ export default function HomePage() {
     })
   }
 
-  // Direction filter — only meaningful when GPS is available AND an
-  // interstate is selected. NS interstate uses lat (Northbound = exit
-  // lat > driver lat), EW uses lng (Eastbound = exit lng > driver lng).
-  // Listings without coordinates are dropped when the filter is engaged
-  // — better than guessing where they sit relative to the driver.
-  if (selectedInterstate && selectedDirection && userLoc) {
+  // Direction filter — drop hotels behind the driver, keep hotels ahead.
+  // PRIMARY signal: signed mile-marker delta. For NB/EB, ahead = hotelMM
+  // > userMM. For SB/WB, ahead = hotelMM < userMM. A 2-mile rearview
+  // buffer keeps a hotel visible for one more exit after passing it, so
+  // a driver can still pull off "last minute" if they change their mind.
+  //
+  // FALLBACK: when userMM can't be computed (no exit data near driver),
+  // we use lat/lng comparison — same as before. This only happens off
+  // the interstate corridor or in the rare case the closest exit has no
+  // mile_marker. The lat/lng path was the source of the GA/Carolinas
+  // 24-mi-gap bug because I-95 curves enough that "lat ahead" misclassifies
+  // exits — but it's better than no direction filter at all.
+  //
+  // Hotels without coordinates get dropped when the filter is engaged
+  // (same as before — we can't place them).
+  if (selectedInterstate && effectiveDirection && userLoc) {
     const axis = INTERSTATE_AXIS[selectedInterstate]
+    const REARVIEW_MI = 2  // how far behind we still show a passed hotel
+
     filtered = filtered.filter((h) => {
       const lat = h.latitude ?? h.exits?.lat
       const lng = h.longitude ?? h.exits?.lng
+      const hMM = h.exits?.mile_marker
       if (lat == null || lng == null) return false
+
+      // MM path — preferred when we know both the driver's MM and the
+      // hotel's MM. Signed delta in the direction of travel:
+      //   NB/EB: ahead = hMM - userMM  (positive = ahead, negative = passed)
+      //   SB/WB: ahead = userMM - hMM
+      if (userMM != null && hMM != null) {
+        const signed = (effectiveDirection === 'N' || effectiveDirection === 'E')
+          ? Number(hMM) - userMM
+          : userMM - Number(hMM)
+        return signed >= -REARVIEW_MI
+      }
+
+      // Fallback path — lat/lng comparison. Less accurate on curving
+      // highways but works when MM data isn't available. We don't apply
+      // the rearview buffer here because we don't have a clean miles-units
+      // measure to apply it to without recomputing.
       if (axis === 'NS') {
-        return selectedDirection === 'N'
-          ? Number(lat) >= userLoc.lat   // ahead going north
-          : Number(lat) <= userLoc.lat   // ahead going south
+        return effectiveDirection === 'N'
+          ? Number(lat) >= userLoc.lat
+          : Number(lat) <= userLoc.lat
       } else {
-        return selectedDirection === 'E'
-          ? Number(lng) >= userLoc.lng   // ahead going east
-          : Number(lng) <= userLoc.lng   // ahead going west
+        return effectiveDirection === 'E'
+          ? Number(lng) >= userLoc.lng
+          : Number(lng) <= userLoc.lng
       }
     })
   }
