@@ -1619,7 +1619,7 @@ export default function HomePage() {
                 {h.name}
               </h2>
               <p style={{ fontSize: '16px', color: 'var(--white)', marginBottom: '20px', fontWeight: 500 }}>
-                Show this to the front desk
+                Your discounted boost rate
               </p>
 
               {/* The rate. Large and unmistakable. */}
@@ -1655,6 +1655,16 @@ export default function HomePage() {
                 }}>
                   {code}
                 </div>
+                {/* Action hint pinned directly under the code — drivers see
+                    the instruction at the moment they see the thing they
+                    need to capture. Larger and brighter than the old
+                    secondary-text caption. */}
+                <p style={{
+                  fontSize: '15px', color: 'var(--white)', marginTop: '12px',
+                  marginBottom: 0, lineHeight: 1.35, fontWeight: 500,
+                }}>
+                  📸 Screenshot this screen<br/>to show at check-in
+                </p>
               </div>
 
               {/* Action: tap to call. This is what actually dials AND
@@ -1678,16 +1688,6 @@ export default function HomePage() {
                 <span style={{ fontSize: '20px', lineHeight: 1 }} aria-hidden="true">📞</span>
                 <span>Call {h.phone || 'front desk'}</span>
               </a>
-
-              <p style={{
-                fontSize: '15px', color: 'var(--white)', marginTop: '16px',
-                textAlign: 'center', lineHeight: 1.4, fontWeight: 500,
-              }}>
-                📸 Screenshot this screen<br/>
-                <span style={{ color: 'var(--fog)', fontSize: '13px', fontWeight: 400 }}>
-                  Show the code at the front desk
-                </span>
-              </p>
             </div>
           </div>
         )
