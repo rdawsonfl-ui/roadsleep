@@ -58,6 +58,10 @@ function AdminPageContent() {
   // Default to Hotels because that's where most of the inventory is and most
   // of the verification work happens.
   const [adminCategory, setAdminCategory] = useState<'hotel' | 'rv_park'>('hotel')
+  // Free-text filter for the listings list — name, city, state, address, phone.
+  // Case-insensitive substring match. 1,335 hotels is enough that scrolling to
+  // find one row is painful; this turns the list into a usable lookup tool.
+  const [listingSearch, setListingSearch] = useState('')
 
   // Testing-mode toggle. When ON, drivers see ALL listings (verified +
   // unverified). When OFF (production), only verified=true show. The green
@@ -738,8 +742,61 @@ function AdminPageContent() {
                 <div style={{ padding: '32px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>No listings yet</div>
               ) : (
                 <div>
+                  {/* Search box — filters listings client-side. Searches across name,
+                      city, state, full address, and phone so the admin can find a row
+                      however they remember it ("lake george", "wifi", "518-792"). */}
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
+                    <input
+                      type="text"
+                      value={listingSearch}
+                      onChange={(e) => setListingSearch(e.target.value)}
+                      placeholder="Search by name, city, state, address, or phone…"
+                      className="dark-input"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    {listingSearch.trim() !== '' && (() => {
+                      const q = listingSearch.trim().toLowerCase()
+                      const visible = hotels
+                        .filter(h => (h.type || 'hotel') === adminCategory)
+                        .filter(h => {
+                          const hay = [
+                            h.name, h.city, h.state, h.address, h.street_address,
+                            h.zip, h.phone,
+                            h.exits?.city, h.exits?.state, h.exits?.interstates?.name,
+                          ].filter(Boolean).join(' ').toLowerCase()
+                          return hay.includes(q)
+                        })
+                      return (
+                        <div style={{ marginTop: '6px', fontSize: '11px', color: 'var(--fog)' }}>
+                          {visible.length} match{visible.length === 1 ? '' : 'es'}
+                          {visible.length > 0 && (
+                            <button
+                              onClick={() => setListingSearch('')}
+                              style={{
+                                marginLeft: '8px', padding: '2px 8px', fontSize: '11px',
+                                background: 'transparent', border: '1px solid var(--border)',
+                                color: 'var(--fog)', borderRadius: '4px', cursor: 'pointer',
+                                fontFamily: 'inherit',
+                              }}
+                            >Clear</button>
+                          )}
+                        </div>
+                      )
+                    })()}
+                  </div>
                   {hotels
                     .filter(h => (h.type || 'hotel') === adminCategory)
+                    .filter(h => {
+                      if (listingSearch.trim() === '') return true
+                      const q = listingSearch.trim().toLowerCase()
+                      const hay = [
+                        h.name, h.city, h.state, h.address, h.street_address,
+                        h.zip, h.phone,
+                        h.exits?.city, h.exits?.state, h.exits?.interstates?.name,
+                      ].filter(Boolean).join(' ').toLowerCase()
+                      return hay.includes(q)
+                    })
                     .map(h => {
                     const exit = h.exits
                     return (
