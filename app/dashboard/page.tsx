@@ -45,15 +45,41 @@ export function DashboardView() {
 
   async function loadAll() {
     setLoading(true)
-    const { data: hotelsData } = await supabase.from('hotels').select('id, name, phone, featured, est_revenue_per_call')
+    // Scope to the current hotelier's hotels only. Without this, the dashboard
+    // would show every hotel + every call across the entire app — useful for
+    // admin testing but wrong for a hotelier looking at their own performance.
+    // Use the auth session to find the hotelier row, then filter hotels by
+    // hotelier_id. If no session (admin viewing /dashboard without login),
+    // fall back to showing all hotels (legacy behavior).
+    const { data: { session } } = await supabase.auth.getSession()
+    let hotelierId: string | null = null
+    if (session?.user) {
+      const { data: ho } = await supabase
+        .from('hoteliers')
+        .select('id')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle()
+      hotelierId = ho?.id ?? null
+    }
+
+    const hotelsQuery = supabase.from('hotels').select('id, name, phone, featured, est_revenue_per_call')
+    const { data: hotelsData } = hotelierId
+      ? await hotelsQuery.eq('hotelier_id', hotelierId)
+      : await hotelsQuery
     if (!hotelsData) { setLoading(false); return }
+    const hotelIds = hotelsData.map(h => h.id)
 
     // Include from_boost + arrival tracking columns so the dashboard can
     // attribute calls to boosts AND show GPS-verified arrivals (the
     // hotelier-grade proof that the boost actually delivered a customer).
-    const { data: calls } = await supabase
+    // Filter to only this hotelier's hotels — same join-via-hotel_id approach
+    // as the My Listings tab, since call_logs.hotelier_id is unreliable.
+    const callsQuery = supabase
       .from('call_logs')
       .select('hotel_id, called_at, from_boost, arrived_at, closest_approach_mi, initial_distance_mi')
+    const { data: calls } = hotelIds.length > 0
+      ? await callsQuery.in('hotel_id', hotelIds)
+      : (hotelierId ? { data: [] } : await callsQuery)
     const callList = calls || []
 
     const now = new Date()

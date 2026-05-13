@@ -147,15 +147,25 @@ export default function HotelierPortal() {
   }, [])
 
   async function loadAll(hotelierId: string) {
-    const [{ data: hotelsData }, { data: callData }, { data: hData }, { data: exitsData }] = await Promise.all([
+    const [{ data: hotelsData }, { data: hData }, { data: exitsData }] = await Promise.all([
       supabase.from('hotels').select('*').eq('hotelier_id', hotelierId),
-      supabase.from('call_logs').select('hotel_id, called_at').eq('hotelier_id', hotelierId),
       supabase.from('hoteliers').select('rate, billing_type').eq('id', hotelierId).single(),
       // Same shape as admin panel — one row per exit, with parent interstate name joined.
       // Sorted so the dropdown reads naturally: I-10 first, then I-75, then I-95, etc.
       supabase.from('exits').select('id, direction, exit_label, mile_marker, city, state, interstates(name)').order('mile_marker'),
     ])
     const hotelList = hotelsData || []
+
+    // Pull call_logs for this hotelier's hotels by hotel_id, NOT by the
+    // call_logs.hotelier_id column. The driver-side logCall() only writes
+    // hotel_id at insert time — hotelier_id stays NULL, so filtering by it
+    // returned zero calls and the dashboard showed 0/0/0 even when there
+    // were real calls in the DB. Joining via hotel_id is the source of truth.
+    const hotelIds = hotelList.map(h => h.id)
+    const { data: callData } = hotelIds.length > 0
+      ? await supabase.from('call_logs').select('hotel_id, called_at').in('hotel_id', hotelIds)
+      : { data: [] as { hotel_id: string; called_at: string }[] }
+
     const calls = callData || []
     setHotels(hotelList)
     setExits((exitsData as unknown as ExitOption[]) || [])
