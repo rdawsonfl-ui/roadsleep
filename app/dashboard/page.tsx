@@ -21,6 +21,11 @@ type HotelWithStats = {
   // within 0.25mi of the hotel. Strongest signal a boost converted.
   arrived_today: number
   arrived_this_month: number
+  // The most recent arrival in this hotel's history — surfaced inline on
+  // the arrival summary so the hotelier sees the exact date/time without
+  // scrolling to find it. Null when there are no arrivals.
+  last_arrival_at: string | null
+  last_arrival_closest_mi: number | null
   revenue_today: number
   revenue_this_month: number
   revenue_last_month: number
@@ -109,6 +114,13 @@ export function DashboardView() {
       // within 0.25mi of the hotel. Strongest signal of booking conversion.
       const arrivedToday = hCalls.filter(c => c.arrived_at && new Date(c.called_at) >= todayStart).length
       const arrivedThisMonth = hCalls.filter(c => c.arrived_at && new Date(c.called_at) >= monthStart).length
+      // Most recent arrival — first row whose arrived_at is set, after sorting
+      // by called_at desc. The arrival summary surfaces this so a hotelier
+      // sees "1 this month — last on May 12 at 6:28 PM" inline.
+      const arrivalRows = hCalls
+        .filter(c => c.arrived_at)
+        .sort((a, b) => new Date(b.arrived_at!).getTime() - new Date(a.arrived_at!).getTime())
+      const lastArrival = arrivalRows[0]
       const projected = dayOfMonth > 0 ? Math.round((thisMonth / dayOfMonth) * daysInMonth) : 0
       return {
         ...h,
@@ -118,6 +130,10 @@ export function DashboardView() {
         boost_calls_this_month: boostThisMonth,
         arrived_today: arrivedToday,
         arrived_this_month: arrivedThisMonth,
+        last_arrival_at: lastArrival?.arrived_at ?? null,
+        last_arrival_closest_mi: lastArrival?.closest_approach_mi != null
+          ? Number(lastArrival.closest_approach_mi)
+          : null,
         revenue_today: today * rate,
         revenue_this_month: thisMonth * rate,
         revenue_last_month: lastMonth * rate,
@@ -252,9 +268,39 @@ export function DashboardView() {
                           <span style={{ color: '#22c55e', fontWeight: 700 }}>📍 Arrivals (GPS-verified):</span>
                           {' '}
                           <span>{selected.arrived_today} today · {selected.arrived_this_month} this month</span>
-                          <span style={{ color: 'var(--fog)', marginLeft: '8px' }}>
+                          <div style={{ color: 'var(--fog)', marginTop: '2px', fontSize: '12px' }}>
                             (driver drove within 0.25mi of your front door)
-                          </span>
+                          </div>
+                          {selected.last_arrival_at && (() => {
+                            // Inline 'last arrival' line so the hotelier sees the
+                            // exact moment of the most recent GPS arrival without
+                            // having to drill into the admin timeline modal. Shows
+                            // closest-approach distance when available — useful
+                            // proof when the hotelier wants to verify "yes, that
+                            // car at 7:14pm was the RoadSleep driver."
+                            const d = new Date(selected.last_arrival_at)
+                            const dateLabel = d.toLocaleDateString([], {
+                              month: 'short', day: 'numeric', year: 'numeric',
+                            })
+                            const timeLabel = d.toLocaleTimeString([], {
+                              hour: 'numeric', minute: '2-digit',
+                            })
+                            return (
+                              <div style={{
+                                color: '#22c55e',
+                                marginTop: '4px',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                              }}>
+                                Last arrival: {dateLabel} at {timeLabel}
+                                {selected.last_arrival_closest_mi != null && (
+                                  <span style={{ color: 'var(--fog)', fontWeight: 400, marginLeft: '6px' }}>
+                                    ({selected.last_arrival_closest_mi.toFixed(2)} mi closest)
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </div>
                       )}
                       <div style={{ color: 'var(--fog)', marginTop: '4px', fontSize: '12px' }}>
