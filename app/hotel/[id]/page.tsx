@@ -84,18 +84,10 @@ export default function HotelPage() {
               </p>
             )}
 
-            {(hotel.price_min || hotel.price_max) && (
-              <div style={{
-                background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)',
-                borderRadius: '12px', padding: '14px 16px', marginBottom: '20px',
-              }}>
-                <div style={{ fontSize: '11px', color: 'var(--fog)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '4px' }}>Price Range</div>
-                <div style={{ fontSize: '32px', fontWeight: 700, fontFamily: 'Syne, sans-serif', color: 'var(--amber)' }}>
-                  ${hotel.price_min} – ${hotel.price_max}
-                  <span style={{ fontSize: '14px', color: 'var(--fog)', fontWeight: 400 }}> / night</span>
-                </div>
-              </div>
-            )}
+            {/* Price range removed — scraped price data was stale and
+                broke trust. Drivers call to get tonight's actual rate.
+                Boosted listings can advertise a rate via the boost banner;
+                regular listings carry no price signal. */}
 
             {hotel.address && (
               <div style={{ marginBottom: '20px' }}>

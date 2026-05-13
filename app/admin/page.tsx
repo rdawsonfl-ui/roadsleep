@@ -614,12 +614,15 @@ function AdminPageContent() {
                     onChange={e => setForm(f => ({ ...f, zip: e.target.value }))}
                     placeholder="31201"/>
                 </div>
+                {/* Price Min/Max are INTERNAL analytics only — never shown
+                    to drivers or hoteliers anywhere in the app. Used by
+                    est_revenue_per_call calculations on the dashboard. */}
                 <div>
-                  <label className="dark-label">Price Min ($/night)</label>
+                  <label className="dark-label">Price Min ($/night) <span style={{ color:'#888', fontSize:'10px' }}>(internal only)</span></label>
                   <input className="dark-input" type="number" value={form.price_min} onChange={e => setForm(f => ({ ...f, price_min: e.target.value }))} placeholder="59"/>
                 </div>
                 <div>
-                  <label className="dark-label">Price Max ($/night)</label>
+                  <label className="dark-label">Price Max ($/night) <span style={{ color:'#888', fontSize:'10px' }}>(internal only)</span></label>
                   <input className="dark-input" type="number" value={form.price_max} onChange={e => setForm(f => ({ ...f, price_max: e.target.value }))} placeholder="89"/>
                 </div>
                 <div>

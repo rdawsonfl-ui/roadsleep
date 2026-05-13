@@ -1459,7 +1459,6 @@ export default function HomePage() {
         </div>
 
         {filtered.map((h) => {
-          const price = h.price_min ? `$${h.price_min}${h.price_max ? `-$${h.price_max}` : ''}` : 'Call'
           const distLabel = h.distance !== null ? `${Math.round(h.distance as number)} mi away` : null
           // Display label for location.
           // - Hotels (or RV parks attached to an exit): "I-95 · MM 318 · City, ST"
@@ -1489,11 +1488,14 @@ export default function HomePage() {
                     {distLabel}
                   </span>
                 )}
-                {/* Hide the inline price when boosted - it's replaced by the
-                    pulsating banner (priced) or by "Featured" (no price). */}
-                {!h.featured && (
-                  <span style={{ marginLeft: 'auto', color: 'var(--amber)', fontWeight: 800, fontSize: '17px', fontStyle: 'italic' }}>{price}</span>
-                )}
+                {/* Price intentionally removed from regular cards. Hotel
+                    rates change daily and scraped price_min/price_max are
+                    stale within hours of capture — showing them broke
+                    trust with drivers and undercut the boost feature's
+                    value. Drivers now call to get tonight's rate. Boosted
+                    hotels get to display a rate (or "★ Featured") via the
+                    pulsating banner below the card body, which is the
+                    only place a price appears in the app. */}
               </div>
               <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--white)', marginBottom: '4px' }}>{h.name}</h3>
               {/* RV parks: render the 'X mi off route' line prominently (15px,
@@ -1543,14 +1545,12 @@ export default function HomePage() {
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
                     {h.boost_price ? (
-                      // Priced boost — show the dollar amount
+                      // Priced boost — show the dollar amount.
+                      // No crossed-out 'normally $X' anymore: regular rates
+                      // aren't displayed anywhere in the app, so there's no
+                      // 'normal' price for the driver to discount from.
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                         <span style={{ fontSize: '28px', lineHeight: 1 }}>${h.boost_price}</span>
-                        {h.price_min && h.price_min > h.boost_price && (
-                          <span style={{ fontSize: '14px', textDecoration: 'line-through', opacity: 0.75, fontWeight: 600 }}>
-                            ${h.price_min}
-                          </span>
-                        )}
                         <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
                       </div>
                     ) : (
@@ -1750,7 +1750,7 @@ export default function HomePage() {
                 {h.name}
               </h2>
               <p style={{ fontSize: '18px', color: 'var(--white)', marginBottom: '20px', fontWeight: 500 }}>
-                {h.boost_price ? 'Your discounted boost rate' : 'RoadSleep featured listing'}
+                {h.boost_price ? 'Your RoadSleep rate tonight' : 'RoadSleep featured listing'}
               </p>
 
               {/* The rate block. With a boost_price, the dollar amount is
@@ -1766,16 +1766,9 @@ export default function HomePage() {
                   Tonight
                 </div>
                 {h.boost_price ? (
-                  <>
-                    <div style={{ fontSize: '64px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
-                      ${h.boost_price}
-                    </div>
-                    {h.price_min && h.price_min > h.boost_price && (
-                      <div style={{ fontSize: '16px', color: 'var(--fog)', marginTop: '6px', textDecoration: 'line-through' }}>
-                        normally ${h.price_min}
-                      </div>
-                    )}
-                  </>
+                  <div style={{ fontSize: '64px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
+                    ${h.boost_price}
+                  </div>
                 ) : (
                   <div style={{
                     fontSize: '26px', fontWeight: 800, color: 'var(--amber)',

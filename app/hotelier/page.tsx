@@ -457,19 +457,17 @@ export default function HotelierPortal() {
 
   async function activateBoost(h: Hotel) {
     if (!hotelier) return
-    // Price is optional now — hoteliers can boost for visibility alone
-    // (no price shown to driver) OR with a disclosed discount rate. If
-    // they enter a price, it has to be valid AND lower than their regular
-    // rate. Empty = price-free boost; the driver banner shows "Featured"
-    // and the modal says "Call for tonight's rate" instead of a $ figure.
+    // Price is optional. Hoteliers can boost for visibility alone (no price
+    // shown to driver) OR with a specific boost rate. If a price is entered,
+    // it just has to be a positive number — we no longer cap it against a
+    // 'regular rate' since the app doesn't advertise regular rates anywhere.
+    // The hotelier sets whatever rate they want to publish for the next
+    // 1/2/3 hours.
     const trimmed = boostPriceInput.trim()
     let priceForBoost: number | null = null
     if (trimmed !== '') {
       const priceNum = parseInt(trimmed, 10)
-      if (!priceNum || priceNum <= 0) { setErr('Discount price must be a positive number, or leave it blank.'); return }
-      if (h.price_min && priceNum >= h.price_min) {
-        setErr(`Discount price ($${priceNum}) must be lower than your regular rate ($${h.price_min}).`); return
-      }
+      if (!priceNum || priceNum <= 0) { setErr('Boost price must be a positive number, or leave it blank.'); return }
       priceForBoost = priceNum
     }
     if (hasUsedBoostToday(h)) { setErr('You have already used today\'s boost on this hotel.'); return }
@@ -635,12 +633,9 @@ export default function HotelierPortal() {
               placeholder="Clean, comfortable rooms right off the highway. Family owned since 1987..."
               rows={4} style={{ width:'100%', background:'var(--night3)', border:'1px solid var(--border)', borderRadius:'10px', padding:'12px 14px', color:'var(--white)', fontSize:'14px', fontFamily:'DM Sans, sans-serif', resize:'vertical', boxSizing:'border-box', marginBottom:'0' }} />
           </Section>
-          <Section title="💰 Nightly Rates">
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
-              <Field label="Rate From ($)" value={String(hotelForm.price_min||'')} onChange={v=>setHotelForm(f=>({...f,price_min:Number(v)}))} placeholder="59" type="number" />
-              <Field label="Rate To ($)" value={String(hotelForm.price_max||'')} onChange={v=>setHotelForm(f=>({...f,price_max:Number(v)}))} placeholder="99" type="number" />
-            </div>
-          </Section>
+          {/* Nightly Rates section removed — RoadSleep doesn't display
+              regular rates on listings. Drivers call to get tonight's rate.
+              Hoteliers control their price signal via Boost only. */}
           <Section title="🕐 Check-in / Check-out">
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
               <Field label="Check-in Time" value={hotelForm.check_in_time||'3:00 PM'} onChange={v=>setHotelForm(f=>({...f,check_in_time:v}))} placeholder="3:00 PM" />
@@ -772,7 +767,6 @@ export default function HotelierPortal() {
                       </h3>
                       <p style={{ fontSize:'13px', color:'var(--fog)', marginBottom:'4px' }}>{h.address}</p>
                       <p style={{ fontSize:'13px', color:'var(--mist)' }}>📞 {h.phone}</p>
-                      {h.price_min > 0 && <p style={{ fontSize:'13px', color:'var(--amber)', marginTop:'4px' }}>${h.price_min}–${h.price_max}/night</p>}
                     </div>
                     <button onClick={() => startEdit(h)} style={{ background:'var(--night3)', border:'1px solid var(--border)', color:'var(--mist)', padding:'8px 16px', borderRadius:'8px', cursor:'pointer', fontSize:'13px', whiteSpace:'nowrap' }}>✏️ Edit</button>
                   </div>
@@ -857,12 +851,12 @@ export default function HotelierPortal() {
                           fontSize: '12px', color: 'var(--mist)',
                           marginBottom: '14px', lineHeight: 1.4,
                         }}>
-                          Get featured to drivers right now with a discounted rate. One boost per day.
+                          Get featured to drivers right now. Set a rate to advertise, or leave it blank. One boost per day.
                         </p>
 
                         <div style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--white)', display: 'block', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                            Your discount price tonight <span style={{ color: 'var(--fog)', fontWeight: 500, textTransform: 'none', letterSpacing: '0' }}>(optional)</span>
+                            Your boost price tonight <span style={{ color: 'var(--fog)', fontWeight: 500, textTransform: 'none', letterSpacing: '0' }}>(optional)</span>
                           </label>
                           <input
                             type="number"
@@ -870,7 +864,7 @@ export default function HotelierPortal() {
                             value={boostingHotelId === h.id ? boostPriceInput : ''}
                             onChange={e => { setBoostingHotelId(h.id); setBoostPriceInput(e.target.value) }}
                             onFocus={() => setBoostingHotelId(h.id)}
-                            placeholder={h.price_min ? `e.g. ${Math.round(h.price_min * 0.75)}` : 'e.g. 59'}
+                            placeholder="e.g. 59"
                             style={{
                               width: '100%', background: 'var(--night)',
                               border: '2px solid var(--border)',
@@ -880,9 +874,7 @@ export default function HotelierPortal() {
                             }}
                           />
                           <p style={{ fontSize: '14px', color: 'var(--mist)', marginTop: '8px', lineHeight: 1.45 }}>
-                            {h.price_min > 0
-                              ? `Must be less than your $${h.price_min} regular rate. Leave blank to boost without showing a price — drivers see "Call for rate" instead.`
-                              : 'Leave blank to boost without showing a price — drivers see "Call for rate" instead.'}
+                            Leave blank to boost without showing a price — drivers see &quot;Call for rate&quot; instead.
                           </p>
                         </div>
 
@@ -919,10 +911,7 @@ export default function HotelierPortal() {
                           const trimmed = boostPriceInput.trim()
                           const hasPrice = trimmed !== ''
                           const priceNum = parseInt(trimmed, 10)
-                          const priceInvalid = hasPrice && (
-                            !priceNum || priceNum <= 0 ||
-                            (h.price_min > 0 && priceNum >= h.price_min)
-                          )
+                          const priceInvalid = hasPrice && (!priceNum || priceNum <= 0)
                           const disabled = boostBusy || priceInvalid
                           return (
                             <button

@@ -328,13 +328,10 @@ function SearchResults() {
                         ) : null}
                       </div>
 
-                      {/* When not boosted, show price inline as before (compact, no banner). */}
-                      {!hotel.featured && (hotel.price_min || hotel.price_max) && (
-                        <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: 'Syne, sans-serif', color: 'var(--amber)', marginBottom: '10px' }}>
-                          ${hotel.price_min}–${hotel.price_max}
-                          <span style={{ fontSize: '11px', color: 'var(--fog)', fontWeight: 400, marginLeft: '4px' }}>/ night</span>
-                        </div>
-                      )}
+                      {/* Regular listings never show a price. Stale rate data
+                          (price_min/price_max scraped weeks/months ago) broke
+                          trust and undercut the boost feature. Drivers call
+                          for tonight's rate. Boost is the only price signal. */}
 
                       {hotel.amenities?.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '12px' }}>
@@ -380,14 +377,6 @@ function SearchResults() {
                                 <span style={{ fontSize: '28px', lineHeight: 1 }}>
                                   ${hotel.boost_price}
                                 </span>
-                                {hotel.price_min && hotel.price_min > hotel.boost_price && (
-                                  <span style={{
-                                    fontSize: '14px', textDecoration: 'line-through',
-                                    opacity: 0.75, fontWeight: 600,
-                                  }}>
-                                    ${hotel.price_min}
-                                  </span>
-                                )}
                                 <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
                               </div>
                             ) : (
