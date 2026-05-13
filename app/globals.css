@@ -178,6 +178,23 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
   .boost-pulse { animation: none; }
 }
 
+/* Hotelier-side "Activate Boost" CTA pulse. Slower than the driver-side
+ * urgency banner (1.6s vs 0.53s) because this one is read at a desk by
+ * a hotelier deciding to spend money — not skimmed at 65 mph. The pulse
+ * is meant to say "this is the action," not "panic, act now." Amber ring
+ * to match the gradient on the button itself. */
+@keyframes boost-pulse-btn {
+  0%   { box-shadow: 0 4px 20px rgba(255,106,0,0.4), 0 0 0 0  rgba(255,106,0,0.55); }
+  70%  { box-shadow: 0 4px 20px rgba(255,106,0,0.4), 0 0 0 18px rgba(255,106,0,0);  }
+  100% { box-shadow: 0 4px 20px rgba(255,106,0,0.4), 0 0 0 0  rgba(255,106,0,0);    }
+}
+.boost-pulse-btn:not(:disabled) {
+  animation: boost-pulse-btn 1.6s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boost-pulse-btn { animation: none; }
+}
+
 /* Admin hotel-card row — desktop stays side-by-side (info | actions),
    mobile stacks vertically so action buttons don't overlap the hotel name.
    Breakpoint at 640px matches typical phone widths. */
