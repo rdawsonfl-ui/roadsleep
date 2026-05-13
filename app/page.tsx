@@ -300,16 +300,19 @@ export default function HomePage() {
   // null = no modal open. Holds the Hotel + the generated code so the
   // code stays stable while the modal is up.
   const [boostRateModal, setBoostRateModal] = useState<{ hotel: Hotel; code: string } | null>(null)
-  // When the driver taps Call on a boosted hotel and we haven't yet
-  // recorded their tracking-consent choice, we park the pending call
-  // info here and pop the ConsentModal. Once they choose, the modal
-  // calls back into resumePendingCall() which logs + (optionally)
-  // starts trackApproach. Without this state we'd have to refactor
-  // the inline async-onClick handler into a named function and
-  // thread state through it — this is simpler.
-  const [pendingCall, setPendingCall] = useState<{
-    hotel: Hotel; initialDist: number | null; hLat: number; hLng: number;
-  } | null>(null)
+  // First-visit tracking-consent modal. Shown ONCE per device — we check
+  // localStorage on mount and only set this to true if the user hasn't
+  // decided yet. Picking allow/deny in the modal persists the choice
+  // and dismisses the modal. After that, the modal never reappears
+  // unless the user resets their consent on /privacy.
+  //
+  // Why on-load instead of on-Call-tap: iOS treats programmatic
+  // tel: navigation (window.location='tel:...') as ambiguous and shows
+  // an "Open in which app" picker, but treats real user-clicked
+  // <a href="tel:"> as unambiguous and dials directly. To keep the
+  // direct dial, the Call button must stay a clean <a> with no
+  // e.preventDefault. So consent is collected up-front.
+  const [showConsent, setShowConsent] = useState(false)
   const [loading, setLoading] = useState(true)
   // NOTE: a max-price slider used to live here. Pulled because the price
   // data we have on hotels is not consistently up-to-date — filtering on
@@ -487,6 +490,16 @@ export default function HomePage() {
   // Default = Hotels because supply is heavier (188 vs 37) and the majority
   // of road travelers want hotels. RV users will tap the other button.
   const [category, setCategory] = useState<'hotel' | 'rv_park'>('hotel')
+
+  // Check tracking-consent state on mount. If the user hasn't decided yet,
+  // show the consent modal. After they pick allow/deny in the modal, the
+  // ConsentModal component persists the choice to localStorage and calls
+  // back via onDecide, which clears showConsent. This is the ONLY place
+  // the consent modal is triggered — never on Call tap, since that would
+  // require preventDefault'ing the tel: link and breaking iOS direct-dial.
+  useEffect(() => {
+    if (getTrackConsent() === null) setShowConsent(true)
+  }, [])
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -1818,35 +1831,26 @@ export default function HomePage() {
                 </p>
               </div>
 
-              {/* Action: tap to call. This dials AND logs the call AND
-                  starts arrival tracking IF the driver has previously
-                  granted tracking consent. If they're a first-time user
-                  with no consent on file, we preventDefault the tel:
-                  navigation, stash the call params in pendingCall, and
-                  show the ConsentModal. After they decide, the modal
-                  fires resumePendingCall() which performs the appropriate
-                  branch and navigates to tel: programmatically. */}
+              {/* Action: tap to call. Plain tel: link — no JS preventDefault.
+                  On iOS, programmatic window.location='tel:...' navigation
+                  triggers the 'Select an app to open this tel link' picker,
+                  whereas a real user-clicked <a href="tel:..."> goes straight
+                  to the dialer. So we keep the <a> doing what it's designed
+                  to do and use onClick only for the side effects (logCall,
+                  conditionally trackApproach). Consent for arrival tracking
+                  is handled by a one-time modal on page load, NOT here. */}
               <a
                 href={`tel:${h.phone || ''}`}
-                onClick={async (e) => {
+                onClick={async () => {
                   const initialDist = h.distance ?? null
+                  const callId = await logCall(h.id, true, initialDist)
                   const hLat = h.latitude ?? h.exits?.lat
                   const hLng = h.longitude ?? h.exits?.lng
-                  const consent = getTrackConsent()
-                  if (consent === null && hLat != null && hLng != null) {
-                    // First-time user. Block the dial and ask them.
-                    e.preventDefault()
-                    setPendingCall({
-                      hotel: h,
-                      initialDist,
-                      hLat: Number(hLat),
-                      hLng: Number(hLng),
-                    })
-                    return
-                  }
-                  // Decided already. Proceed inline as before.
-                  const callId = await logCall(h.id, true, initialDist)
-                  if (consent === 'allow' && callId && hLat != null && hLng != null) {
+                  // Only start arrival tracking if the driver has previously
+                  // consented. No consent or explicit deny -> call still
+                  // fires (the tel: navigation handles that), we just don't
+                  // run the GPS sample loop.
+                  if (getTrackConsent() === 'allow' && callId && hLat != null && hLng != null) {
                     trackApproach(callId, Number(hLat), Number(hLng))
                   }
                   // Don't close immediately — let driver come back from
@@ -1868,30 +1872,16 @@ export default function HomePage() {
         )
       })()}
 
-      {/* Just-in-time tracking consent modal. Shows the first time a
-          driver triggers arrival tracking (boost-modal Call tap). After
-          they choose, the choice persists in localStorage and the modal
-          never reappears for that device unless they reset it on the
-          /privacy page. */}
-      {pendingCall && (
+      {/* First-visit tracking consent modal. Shows once when the user
+          lands on the home page with no prior consent decision. After
+          they pick allow/deny, the choice persists in localStorage
+          and this modal never reappears (unless they reset via /privacy).
+          NOTE: this is page-load only — NOT triggered by the Call button,
+          because preventDefault'ing a tel: link on iOS forces an
+          'open in which app' picker instead of going to the dialer. */}
+      {showConsent && (
         <ConsentModal
-          hotelName={pendingCall.hotel.name}
-          onDecide={async (choice) => {
-            const { hotel, initialDist, hLat, hLng } = pendingCall
-            setPendingCall(null)
-            // Always log the call — the hotelier still earns the tap.
-            // Only the GPS tracking depends on consent.
-            const callId = await logCall(hotel.id, true, initialDist)
-            if (choice === 'allow' && callId) {
-              trackApproach(callId, hLat, hLng)
-            }
-            // Now actually dial. We do this AFTER logging so the call_logs
-            // row reflects the tap even if the dialer takes focus before
-            // logCall finishes (rare with Supabase but worth being defensive).
-            if (hotel.phone) {
-              window.location.href = `tel:${hotel.phone}`
-            }
-          }}
+          onDecide={() => setShowConsent(false)}
         />
       )}
 

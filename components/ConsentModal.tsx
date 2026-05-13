@@ -22,10 +22,8 @@ import { setTrackConsent } from '@/lib/consent'
 //   - Link to full Privacy Policy so the curious driver can read it.
 
 export function ConsentModal({
-  hotelName,
   onDecide,
 }: {
-  hotelName: string
   onDecide: (choice: 'allow' | 'deny') => void
 }) {
   function pick(choice: 'allow' | 'deny') {
@@ -61,16 +59,17 @@ export function ConsentModal({
           fontFamily: 'Syne, sans-serif', textAlign: 'center',
           marginBottom: '12px', letterSpacing: '0.3px',
         }}>
-          Before you call
+          Welcome to RoadSleep
         </h2>
 
         <p style={{
           fontSize: '14px', color: 'var(--mist)',
           lineHeight: 1.5, marginBottom: '14px',
         }}>
-          To confirm whether you arrived at <strong style={{ color: 'var(--white)' }}>{hotelName}</strong>,
-          RoadSleep would like to check your location periodically for the
-          next 90 minutes.
+          When you call a featured hotel through RoadSleep, we can confirm
+          for you and the hotel whether you arrived — by checking your
+          distance to <strong style={{ color: 'var(--white)' }}>that hotel only</strong>
+          {' '}for up to 90 minutes after your call.
         </p>
 
         <div style={{
@@ -108,7 +107,7 @@ export function ConsentModal({
               boxShadow: '0 4px 20px rgba(255,106,0,0.4)',
             }}
           >
-            ✓ Yes, track arrival &amp; call
+            ✓ Allow arrival tracking
           </button>
           <button
             onClick={() => pick('deny')}
@@ -120,7 +119,7 @@ export function ConsentModal({
               cursor: 'pointer',
             }}
           >
-            Just call — don&apos;t track me
+            No thanks — just hotels &amp; calls
           </button>
         </div>
 
