@@ -32,6 +32,18 @@ type ExitOption = {
   interstates: { name: string } | null
 }
 type CallStat = { calls_today: number; calls_month: number; calls_total: number; revenue_month: number }
+// One row in the per-hotel "Recent calls" mini-log on the My Listings card.
+// Snapshot of the call_logs columns the hotelier cares about:
+//   - when the call came in
+//   - was it from a boost (★) or organic
+//   - did the driver actually drive in (📍 arrival) and how close did they get
+type RecentCall = {
+  hotel_id: string
+  called_at: string
+  from_boost: boolean | null
+  arrived_at: string | null
+  closest_approach_mi: number | null
+}
 
 const AMENITY_OPTIONS = [
   { key: 'truck_parking', label: '🚛 Truck Parking' },
@@ -50,6 +62,9 @@ export default function HotelierPortal() {
   const [hotels, setHotels]         = useState<Hotel[]>([])
   const [exits, setExits]           = useState<ExitOption[]>([])
   const [stats, setStats]           = useState<Record<string, CallStat>>({})
+  // Per-hotel last-5-calls list for the Recent Calls mini-log on each card.
+  // Populated by loadAll alongside stats; same source of truth (call_logs).
+  const [recentCalls, setRecentCalls] = useState<Record<string, RecentCall[]>>({})
   const [rate, setRate]             = useState(5)
   const [billingType, setBillingType] = useState<'per_call'|'monthly'>('per_call')
   // Hotelier portal has four "tabs":
@@ -161,12 +176,17 @@ export default function HotelierPortal() {
     // hotel_id at insert time — hotelier_id stays NULL, so filtering by it
     // returned zero calls and the dashboard showed 0/0/0 even when there
     // were real calls in the DB. Joining via hotel_id is the source of truth.
+    // We also pull from_boost + arrived_at + closest_approach_mi so each
+    // hotel card can render a Recent Calls mini-log with boost/arrival flags.
     const hotelIds = hotelList.map(h => h.id)
     const { data: callData } = hotelIds.length > 0
-      ? await supabase.from('call_logs').select('hotel_id, called_at').in('hotel_id', hotelIds)
-      : { data: [] as { hotel_id: string; called_at: string }[] }
+      ? await supabase.from('call_logs')
+          .select('hotel_id, called_at, from_boost, arrived_at, closest_approach_mi')
+          .in('hotel_id', hotelIds)
+          .order('called_at', { ascending: false })
+      : { data: [] as RecentCall[] }
 
-    const calls = callData || []
+    const calls = (callData || []) as RecentCall[]
     setHotels(hotelList)
     setExits((exitsData as unknown as ExitOption[]) || [])
     if (hData) { setRate(hData.rate || 5); setBillingType(hData.billing_type || 'per_call') }
@@ -178,6 +198,11 @@ export default function HotelierPortal() {
     const bType      = hData?.billing_type || 'per_call'
 
     const statsMap: Record<string, CallStat> = {}
+    // recentMap holds the 5 newest calls per hotel for the mini-log on each
+    // card. Already sorted descending by called_at above, so .slice(0, 5)
+    // gives us the latest. Kept separate from statsMap so React state stays
+    // typed cleanly.
+    const recentMap: Record<string, RecentCall[]> = {}
     for (const h of hotelList) {
       const hc      = calls.filter(c => c.hotel_id === h.id)
       const today   = hc.filter(c => new Date(c.called_at) >= todayStart).length
@@ -187,8 +212,10 @@ export default function HotelierPortal() {
         calls_today: today, calls_month: month, calls_total: total,
         revenue_month: bType === 'monthly' ? (hData?.rate || 0) : month * r,
       }
+      recentMap[h.id] = hc.slice(0, 5)
     }
     setStats(statsMap)
+    setRecentCalls(recentMap)
   }
 
   // Sign up via Supabase Auth, then create the hoteliers profile row linked
@@ -296,7 +323,7 @@ export default function HotelierPortal() {
 
   async function logout() {
     await supabase.auth.signOut()
-    setHotelier(null); setHotels([]); setStats({}); setView('dashboard'); setMsg('')
+    setHotelier(null); setHotels([]); setStats({}); setRecentCalls({}); setView('dashboard'); setMsg('')
   }
 
   function startEdit(hotel: Hotel) {
@@ -733,6 +760,86 @@ export default function HotelierPortal() {
                       </div>
                     ))}
                   </div>
+
+                  {/* ─── RECENT CALLS MINI-LOG ──────────────────────────────────
+                       Last 5 call_logs rows for this hotel, with at-a-glance
+                       flags for each: ★ if it came in during a boost, 📍 if
+                       the driver actually drove to within 0.25mi of the hotel.
+                       Empty state encourages a first boost.                       */}
+                  {(() => {
+                    const rc = recentCalls[h.id] || []
+                    return (
+                      <div style={{
+                        marginTop: '14px',
+                        background: 'var(--night3)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        padding: '12px 14px',
+                      }}>
+                        <div style={{
+                          fontSize: '11px', color: 'var(--fog)',
+                          textTransform: 'uppercase', letterSpacing: '0.1em',
+                          fontWeight: 700, marginBottom: '8px',
+                        }}>
+                          📞 Recent Calls
+                        </div>
+                        {rc.length === 0 ? (
+                          <div style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.45 }}>
+                            No calls yet. Boost your listing below to start driving traffic.
+                          </div>
+                        ) : (
+                          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {rc.map((c, i) => {
+                              const d = new Date(c.called_at)
+                              const now = new Date()
+                              const isToday = d.toDateString() === now.toDateString()
+                              const yesterday = new Date(now)
+                              yesterday.setDate(now.getDate() - 1)
+                              const isYesterday = d.toDateString() === yesterday.toDateString()
+                              const dayLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                              const timeLabel = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                              return (
+                                <li key={i} style={{
+                                  display: 'flex', alignItems: 'center', gap: '8px',
+                                  fontSize: '13px', color: 'var(--white)',
+                                  padding: '6px 0',
+                                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                                }}>
+                                  <span style={{ color: 'var(--mist)', minWidth: '100px' }}>
+                                    {dayLabel} <span style={{ color: 'var(--fog)' }}>{timeLabel}</span>
+                                  </span>
+                                  {c.from_boost && (
+                                    <span style={{
+                                      fontSize: '10px', background: 'rgba(245,166,35,0.15)',
+                                      color: 'var(--amber)', padding: '2px 7px',
+                                      borderRadius: '10px', fontWeight: 700,
+                                      border: '1px solid rgba(245,166,35,0.30)',
+                                    }}>
+                                      ★ boost
+                                    </span>
+                                  )}
+                                  {c.arrived_at && (
+                                    <span
+                                      title={c.closest_approach_mi != null
+                                        ? `Driver closed to ${c.closest_approach_mi.toFixed(2)} mi of your front door (GPS-verified).`
+                                        : 'GPS-verified arrival.'}
+                                      style={{
+                                        fontSize: '10px', background: 'rgba(34,197,94,0.15)',
+                                        color: '#22c55e', padding: '2px 7px',
+                                        borderRadius: '10px', fontWeight: 700,
+                                        border: '1px solid rgba(34,197,94,0.30)',
+                                      }}>
+                                      📍 arrived
+                                    </span>
+                                  )}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })()}
 
                   {/* ─── BOOST CONTROL ─────────────────────────────────────────
                        Three states drive the UI:
