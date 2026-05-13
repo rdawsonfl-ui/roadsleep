@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import PasswordInput from '@/app/components/PasswordInput'
 import SiteFooter from '@/app/components/SiteFooter'
+import { DashboardView } from '@/app/dashboard/page'
 
 type Hotelier = { id: string; email: string; name: string; business_phone: string }
 type Hotel = {
@@ -51,7 +52,15 @@ export default function HotelierPortal() {
   const [stats, setStats]           = useState<Record<string, CallStat>>({})
   const [rate, setRate]             = useState(5)
   const [billingType, setBillingType] = useState<'per_call'|'monthly'>('per_call')
-  const [view, setView]             = useState<'dashboard'|'edit'|'new'>('dashboard')
+  // Hotelier portal has four "tabs":
+  //   dashboard   — original landing page: hotel list with edit/boost buttons
+  //   performance — embedded DashboardView showing calls/boost/GPS arrivals
+  //   edit        — edit form for an existing hotel
+  //   new         — add a new hotel
+  // 'dashboard' and 'performance' are tabbed in the UI; edit/new are
+  // sub-pages reachable from dashboard. We kept the old 'dashboard'
+  // name for backwards-compat with existing state machine code.
+  const [view, setView]             = useState<'dashboard'|'performance'|'edit'|'new'>('dashboard')
   const [selectedHotel, setSelectedHotel] = useState<Hotel | null>(null)
   const [saving, setSaving]         = useState(false)
   const [msg, setMsg]               = useState('')
@@ -608,6 +617,53 @@ export default function HotelierPortal() {
           </div>
         </div>
 
+        {/* Tab navigation. Two main hotelier views:
+            - 📊 Performance: stats, boost attribution, GPS arrivals (was /dashboard)
+            - 🏨 My Listings: hotel cards with edit/boost controls (was /hotelier)
+            Edit/new forms are sub-pages reachable from My Listings. */}
+        <div style={{
+          display: 'flex', gap: '4px', marginBottom: '20px',
+          borderBottom: '1px solid var(--border)',
+        }}>
+          {([
+            ['dashboard', '🏨 My Listings'],
+            ['performance', '📊 Performance'],
+          ] as const).map(([key, label]) => {
+            const active = view === key
+            return (
+              <button
+                key={key}
+                onClick={() => setView(key)}
+                style={{
+                  padding: '10px 16px',
+                  background: active ? 'var(--night2)' : 'transparent',
+                  border: 'none',
+                  borderBottom: active ? '2px solid var(--amber)' : '2px solid transparent',
+                  color: active ? 'var(--white)' : 'var(--fog)',
+                  fontSize: '14px',
+                  fontWeight: active ? 700 : 500,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  marginBottom: '-1px',  // overlap the container border
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Performance tab — embeds the same DashboardView the /dashboard
+            route renders, so we don't duplicate 300 lines of stats UI. */}
+        {view === 'performance' && (
+          <div style={{ marginBottom: '24px' }}>
+            <DashboardView />
+          </div>
+        )}
+
+        {/* My Listings tab — the original /hotelier landing content. */}
+        {view === 'dashboard' && <>
+
         {msg && <GreenBox msg={msg} />}
 
         {hotels.length > 0 && (
@@ -802,6 +858,7 @@ export default function HotelierPortal() {
             })}
           </div>
         )}
+        </>}
       </div>
     </main>
     <SiteFooter />

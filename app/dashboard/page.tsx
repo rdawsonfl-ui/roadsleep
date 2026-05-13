@@ -27,7 +27,14 @@ type HotelWithStats = {
   projected_monthly: number
 }
 
-export default function HotelierDashboard() {
+export default function HotelierDashboardPage() {
+  // Standalone /dashboard route — kept for backwards-compat with bookmarks.
+  // The actual UI lives in DashboardView so /hotelier can render the same
+  // thing inside its Performance tab without duplicating 300 lines of code.
+  return <DashboardView />
+}
+
+export function DashboardView() {
   const [hotels, setHotels] = useState<HotelWithStats[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
   const [loading, setLoading] = useState(true)
