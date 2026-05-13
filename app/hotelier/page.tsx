@@ -791,109 +791,6 @@ export default function HotelierPortal() {
                     ))}
                   </div>
 
-                  {/* ─── RECENT CALLS MINI-LOG ──────────────────────────────────
-                       Last 5 call_logs rows for this hotel, with at-a-glance
-                       flags for each: ★ if it came in during a boost, 📍 if
-                       the driver actually drove to within 0.25mi of the hotel.
-                       Empty state encourages a first boost.                       */}
-                  {(() => {
-                    const rc = recentCalls[h.id] || []
-                    return (
-                      <div style={{
-                        marginTop: '14px',
-                        background: 'var(--night3)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '10px',
-                        padding: '12px 14px',
-                      }}>
-                        <div style={{
-                          fontSize: '11px', color: 'var(--fog)',
-                          textTransform: 'uppercase', letterSpacing: '0.1em',
-                          fontWeight: 700, marginBottom: '8px',
-                        }}>
-                          📞 Recent Calls
-                        </div>
-                        {rc.length === 0 ? (
-                          <div style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.45 }}>
-                            No calls yet. Boost your listing below to start driving traffic.
-                          </div>
-                        ) : (
-                          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {rc.map((c, i) => {
-                              const d = new Date(c.called_at)
-                              const now = new Date()
-                              const isToday = d.toDateString() === now.toDateString()
-                              const yesterday = new Date(now)
-                              yesterday.setDate(now.getDate() - 1)
-                              const isYesterday = d.toDateString() === yesterday.toDateString()
-                              const dayLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-                              const timeLabel = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                              // Best-effort 'where was the driver' line. We have
-                              // the hotel's interstate from the lookup map, and
-                              // initial_distance_mi snapshotted at tap time.
-                              // Both may be missing on older rows; we render
-                              // whatever's available, or hide the line entirely
-                              // when we have neither.
-                              const interstate = hotelInterstate[c.hotel_id]
-                              const dist = c.initial_distance_mi
-                              const hasOrigin = interstate || dist != null
-                              return (
-                                <li key={i} style={{
-                                  display: 'flex', flexDirection: 'column', gap: '2px',
-                                  fontSize: '13px', color: 'var(--white)',
-                                  padding: '8px 0',
-                                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-                                }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                    <span style={{ color: 'var(--mist)' }}>
-                                      {dayLabel} <span style={{ color: 'var(--fog)' }}>{timeLabel}</span>
-                                    </span>
-                                    {c.from_boost && (
-                                      <span style={{
-                                        fontSize: '10px', background: 'rgba(245,166,35,0.15)',
-                                        color: 'var(--amber)', padding: '2px 7px',
-                                        borderRadius: '10px', fontWeight: 700,
-                                        border: '1px solid rgba(245,166,35,0.30)',
-                                      }}>
-                                        ★ boost
-                                      </span>
-                                    )}
-                                    {c.arrived_at && (
-                                      <span
-                                        title={c.closest_approach_mi != null
-                                          ? `Driver closed to ${c.closest_approach_mi.toFixed(2)} mi of your front door (GPS-verified).`
-                                          : 'GPS-verified arrival.'}
-                                        style={{
-                                          fontSize: '10px', background: 'rgba(34,197,94,0.15)',
-                                          color: '#22c55e', padding: '2px 7px',
-                                          borderRadius: '10px', fontWeight: 700,
-                                          border: '1px solid rgba(34,197,94,0.30)',
-                                        }}>
-                                        📍 arrived
-                                      </span>
-                                    )}
-                                  </div>
-                                  {hasOrigin && (
-                                    <div style={{ fontSize: '12px', color: 'var(--fog)' }}>
-                                      Driver called from
-                                      {interstate && <span style={{ color: 'var(--mist)', fontWeight: 600 }}> {interstate}</span>}
-                                      {dist != null && (
-                                        <>
-                                          {interstate ? ' · ' : ' '}
-                                          <span style={{ color: 'var(--mist)', fontWeight: 600 }}>{dist.toFixed(1)} mi away</span>
-                                        </>
-                                      )}
-                                    </div>
-                                  )}
-                                </li>
-                              )
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    )
-                  })()}
-
                   {/* ─── BOOST CONTROL ─────────────────────────────────────────
                        Three states drive the UI:
                          (a) currently boosted → show countdown + End Now button
@@ -1057,6 +954,104 @@ export default function HotelierPortal() {
                       </div>
                     )}
                   </div>
+
+                  {/* ─── RECENT CALLS MINI-LOG ──────────────────────────────────
+                       Last 5 call_logs rows for this hotel. Lives BELOW the
+                       boost panel so the hotelier doesn't have to scroll
+                       past their call history to find the Activate button —
+                       boost is the action, calls are the proof. */}
+                  {(() => {
+                    const rc = recentCalls[h.id] || []
+                    return (
+                      <div style={{
+                        marginTop: '14px',
+                        background: 'var(--night3)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '10px',
+                        padding: '12px 14px',
+                      }}>
+                        <div style={{
+                          fontSize: '11px', color: 'var(--fog)',
+                          textTransform: 'uppercase', letterSpacing: '0.1em',
+                          fontWeight: 700, marginBottom: '8px',
+                        }}>
+                          📞 Recent Calls
+                        </div>
+                        {rc.length === 0 ? (
+                          <div style={{ fontSize: '12px', color: 'var(--fog)', lineHeight: 1.45 }}>
+                            No calls yet. Boost your listing above to start driving traffic.
+                          </div>
+                        ) : (
+                          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            {rc.map((c, i) => {
+                              const d = new Date(c.called_at)
+                              const now = new Date()
+                              const isToday = d.toDateString() === now.toDateString()
+                              const yesterday = new Date(now)
+                              yesterday.setDate(now.getDate() - 1)
+                              const isYesterday = d.toDateString() === yesterday.toDateString()
+                              const dayLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                              const timeLabel = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                              const interstate = hotelInterstate[c.hotel_id]
+                              const dist = c.initial_distance_mi
+                              const hasOrigin = interstate || dist != null
+                              return (
+                                <li key={i} style={{
+                                  display: 'flex', flexDirection: 'column', gap: '2px',
+                                  fontSize: '13px', color: 'var(--white)',
+                                  padding: '8px 0',
+                                  borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                                }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span style={{ color: 'var(--mist)' }}>
+                                      {dayLabel} <span style={{ color: 'var(--fog)' }}>{timeLabel}</span>
+                                    </span>
+                                    {c.from_boost && (
+                                      <span style={{
+                                        fontSize: '10px', background: 'rgba(245,166,35,0.15)',
+                                        color: 'var(--amber)', padding: '2px 7px',
+                                        borderRadius: '10px', fontWeight: 700,
+                                        border: '1px solid rgba(245,166,35,0.30)',
+                                      }}>
+                                        ★ boost
+                                      </span>
+                                    )}
+                                    {c.arrived_at && (
+                                      <span
+                                        title={c.closest_approach_mi != null
+                                          ? `Driver closed to ${c.closest_approach_mi.toFixed(2)} mi of your front door (GPS-verified).`
+                                          : 'GPS-verified arrival.'}
+                                        style={{
+                                          fontSize: '10px', background: 'rgba(34,197,94,0.15)',
+                                          color: '#22c55e', padding: '2px 7px',
+                                          borderRadius: '10px', fontWeight: 700,
+                                          border: '1px solid rgba(34,197,94,0.30)',
+                                        }}>
+                                        📍 arrived
+                                      </span>
+                                    )}
+                                  </div>
+                                  {hasOrigin && (
+                                    <div style={{ fontSize: '12px', color: 'var(--fog)' }}>
+                                      Driver called from
+                                      {interstate && <span style={{ color: 'var(--mist)', fontWeight: 600 }}> {interstate}</span>}
+                                      {dist != null && (
+                                        <>
+                                          {interstate ? ' · ' : ' '}
+                                          <span style={{ color: 'var(--mist)', fontWeight: 600 }}>{dist.toFixed(1)} mi away</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )
+                  })()}
+
                   {h.amenities?.length > 0 && (
                     <div style={{ display:'flex', flexWrap:'wrap', gap:'4px', marginTop:'10px' }}>
                       {h.amenities.map(a => {
