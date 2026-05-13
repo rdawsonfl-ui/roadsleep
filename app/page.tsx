@@ -1489,8 +1489,9 @@ export default function HomePage() {
                     {distLabel}
                   </span>
                 )}
-                {/* Hide the inline price when boosted - it'll show in the big pulsating banner instead */}
-                {!(h.featured && h.boost_price) && (
+                {/* Hide the inline price when boosted - it's replaced by the
+                    pulsating banner (priced) or by "Featured" (no price). */}
+                {!h.featured && (
                   <span style={{ marginLeft: 'auto', color: 'var(--amber)', fontWeight: 800, fontSize: '17px', fontStyle: 'italic' }}>{price}</span>
                 )}
               </div>
@@ -1517,10 +1518,13 @@ export default function HomePage() {
                   ))}
                 </div>
               )}
-              {/* Pulsating discount banner — only renders when hotelier has an active boost
-                  AND has set a discount price. Big discount price + regular rate strike-through.
-                  Sits directly above the Call button to drive eyes to the price → CTA pair. */}
-              {h.featured && h.boost_price && (
+              {/* Pulsating boost banner — renders whenever the hotelier is
+                  currently boosted (featured = true). Content adapts to
+                  whether they set a discount price:
+                    - With price:   big $XX + crossed-out regular rate
+                    - Without:      'Featured' + 'Call for tonight's rate'
+                  Either way, eyes land on the banner above the Call button. */}
+              {h.featured && (
                 <div className="boost-pulse" style={{
                   marginBottom: '10px',
                   padding: '14px 14px',
@@ -1537,19 +1541,24 @@ export default function HomePage() {
                   <span style={{ fontSize: '10px', letterSpacing: '1.5px', opacity: 0.9, display: 'block', marginBottom: '6px' }}>
                     🔥 LIMITED-TIME DEAL
                   </span>
-                  {/* Price stays centered/hero. Pitch sits to the right of the price block,
-                      3× the size of the original 11px message, dark navy on red, with a
-                      left arrow tying it back to the price. */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                      <span style={{ fontSize: '28px', lineHeight: 1 }}>${h.boost_price}</span>
-                      {h.price_min && h.price_min > h.boost_price && (
-                        <span style={{ fontSize: '14px', textDecoration: 'line-through', opacity: 0.75, fontWeight: 600 }}>
-                          ${h.price_min}
-                        </span>
-                      )}
-                      <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
-                    </div>
+                    {h.boost_price ? (
+                      // Priced boost — show the dollar amount
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                        <span style={{ fontSize: '28px', lineHeight: 1 }}>${h.boost_price}</span>
+                        {h.price_min && h.price_min > h.boost_price && (
+                          <span style={{ fontSize: '14px', textDecoration: 'line-through', opacity: 0.75, fontWeight: 600 }}>
+                            ${h.price_min}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
+                      </div>
+                    ) : (
+                      // Price-free boost — show "Featured" badge, no $ amount
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                        <span style={{ fontSize: '24px', lineHeight: 1, letterSpacing: '0.5px' }}>★ FEATURED</span>
+                      </div>
+                    )}
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: '8px',
                       color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 800,
@@ -1741,10 +1750,14 @@ export default function HomePage() {
                 {h.name}
               </h2>
               <p style={{ fontSize: '18px', color: 'var(--white)', marginBottom: '20px', fontWeight: 500 }}>
-                Your discounted boost rate
+                {h.boost_price ? 'Your discounted boost rate' : 'RoadSleep featured listing'}
               </p>
 
-              {/* The rate. Large and unmistakable. */}
+              {/* The rate block. With a boost_price, the dollar amount is
+                  the hero. Without one, we still need to give the driver
+                  something concrete to land on, so the same slot shows
+                  "Call for tonight's rate" — same visual weight, different
+                  message. Drivers in either case proceed to the call. */}
               <div style={{
                 background: 'var(--night2)', borderRadius: '12px',
                 padding: '20px', marginBottom: '16px', textAlign: 'center',
@@ -1752,12 +1765,23 @@ export default function HomePage() {
                 <div style={{ fontSize: '14px', color: 'var(--white)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', fontWeight: 600 }}>
                   Tonight
                 </div>
-                <div style={{ fontSize: '64px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
-                  ${h.boost_price}
-                </div>
-                {h.price_min && h.boost_price && h.price_min > h.boost_price && (
-                  <div style={{ fontSize: '16px', color: 'var(--fog)', marginTop: '6px', textDecoration: 'line-through' }}>
-                    normally ${h.price_min}
+                {h.boost_price ? (
+                  <>
+                    <div style={{ fontSize: '64px', fontWeight: 800, color: 'var(--amber)', lineHeight: 1 }}>
+                      ${h.boost_price}
+                    </div>
+                    {h.price_min && h.price_min > h.boost_price && (
+                      <div style={{ fontSize: '16px', color: 'var(--fog)', marginTop: '6px', textDecoration: 'line-through' }}>
+                        normally ${h.price_min}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{
+                    fontSize: '26px', fontWeight: 800, color: 'var(--amber)',
+                    lineHeight: 1.2, padding: '8px 0',
+                  }}>
+                    Call for<br/>tonight&apos;s rate
                   </div>
                 )}
               </div>

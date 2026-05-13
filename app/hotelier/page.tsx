@@ -390,10 +390,20 @@ export default function HotelierPortal() {
 
   async function activateBoost(h: Hotel) {
     if (!hotelier) return
-    const priceNum = parseInt(boostPriceInput, 10)
-    if (!priceNum || priceNum <= 0) { setErr('Enter a discount price first.'); return }
-    if (h.price_min && priceNum >= h.price_min) {
-      setErr(`Discount price ($${priceNum}) must be lower than your regular rate ($${h.price_min}).`); return
+    // Price is optional now — hoteliers can boost for visibility alone
+    // (no price shown to driver) OR with a disclosed discount rate. If
+    // they enter a price, it has to be valid AND lower than their regular
+    // rate. Empty = price-free boost; the driver banner shows "Featured"
+    // and the modal says "Call for tonight's rate" instead of a $ figure.
+    const trimmed = boostPriceInput.trim()
+    let priceForBoost: number | null = null
+    if (trimmed !== '') {
+      const priceNum = parseInt(trimmed, 10)
+      if (!priceNum || priceNum <= 0) { setErr('Discount price must be a positive number, or leave it blank.'); return }
+      if (h.price_min && priceNum >= h.price_min) {
+        setErr(`Discount price ($${priceNum}) must be lower than your regular rate ($${h.price_min}).`); return
+      }
+      priceForBoost = priceNum
     }
     if (hasUsedBoostToday(h)) { setErr('You have already used today\'s boost on this hotel.'); return }
 
@@ -402,7 +412,7 @@ export default function HotelierPortal() {
     const endsAt = new Date(now.getTime() + boostDuration * 60 * 60 * 1000)
     const { error } = await supabase.from('hotels').update({
       featured: true,
-      boost_price: priceNum,
+      boost_price: priceForBoost,
       boost_started_at: now.toISOString(),
       boost_ends_at: endsAt.toISOString(),
       boost_duration_hr: boostDuration,
@@ -785,7 +795,7 @@ export default function HotelierPortal() {
 
                         <div style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '11px', color: 'var(--white)', display: 'block', marginBottom: '6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                            Your discount price tonight
+                            Your discount price tonight <span style={{ color: 'var(--fog)', fontWeight: 500, textTransform: 'none', letterSpacing: '0' }}>(optional)</span>
                           </label>
                           <input
                             type="number"
@@ -802,11 +812,11 @@ export default function HotelierPortal() {
                               fontFamily: 'Syne, sans-serif', boxSizing: 'border-box',
                             }}
                           />
-                          {h.price_min > 0 && (
-                            <p style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px' }}>
-                              Must be less than your ${h.price_min} regular rate
-                            </p>
-                          )}
+                          <p style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px', lineHeight: 1.4 }}>
+                            {h.price_min > 0
+                              ? `Must be less than your $${h.price_min} regular rate. Leave blank to boost without showing a price — drivers see "Call for rate" instead.`
+                              : 'Leave blank to boost without showing a price — drivers see "Call for rate" instead.'}
+                          </p>
                         </div>
 
                         <div style={{ marginBottom: '14px' }}>
@@ -833,40 +843,46 @@ export default function HotelierPortal() {
                           </div>
                         </div>
 
-                        <button
-                          onClick={() => { setBoostingHotelId(h.id); activateBoost(h) }}
-                          disabled={
-                            boostBusy ||
-                            !boostPriceInput ||
-                            boostingHotelId !== h.id ||
-                            parseInt(boostPriceInput, 10) <= 0 ||
-                            (h.price_min > 0 && parseInt(boostPriceInput, 10) >= h.price_min)
-                          }
-                          className="boost-pulse-btn"
-                          style={{
-                            width: '100%', padding: '18px',
-                            background: 'linear-gradient(135deg, #FF6A00 0%, #F5A623 100%)',
-                            color: '#FFFFFF', border: 'none', borderRadius: '12px',
-                            fontSize: '18px', fontWeight: 800, fontFamily: 'Syne, sans-serif',
-                            cursor: 'pointer', letterSpacing: '0.5px',
-                            boxShadow: '0 4px 20px rgba(255,106,0,0.4)',
-                            opacity: (
-                              !boostPriceInput ||
-                              boostingHotelId !== h.id ||
-                              parseInt(boostPriceInput, 10) <= 0 ||
-                              (h.price_min > 0 && parseInt(boostPriceInput, 10) >= h.price_min)
-                            ) ? 0.55 : 1,
-                          }}
-                        >
-                          {boostBusy && boostingHotelId === h.id
-                            ? 'Activating…'
-                            : `🔥 ACTIVATE BOOST — ${boostingHotelId === h.id ? boostDuration : 1} HR`}
-                        </button>
+                        {(() => {
+                          // Price is optional. The activate button is enabled
+                          // when either (a) the field is empty (price-free
+                          // boost) or (b) the field has a value that passes
+                          // validation. Always-enabled feels more like a CTA;
+                          // an inert hero button reads as broken.
+                          const trimmed = boostPriceInput.trim()
+                          const hasPrice = trimmed !== ''
+                          const priceNum = parseInt(trimmed, 10)
+                          const priceInvalid = hasPrice && (
+                            !priceNum || priceNum <= 0 ||
+                            (h.price_min > 0 && priceNum >= h.price_min)
+                          )
+                          const disabled = boostBusy || priceInvalid
+                          return (
+                            <button
+                              onClick={() => { setBoostingHotelId(h.id); activateBoost(h) }}
+                              disabled={disabled}
+                              className="boost-pulse-btn"
+                              style={{
+                                width: '100%', padding: '18px',
+                                background: 'linear-gradient(135deg, #FF6A00 0%, #F5A623 100%)',
+                                color: '#FFFFFF', border: 'none', borderRadius: '12px',
+                                fontSize: '18px', fontWeight: 800, fontFamily: 'Syne, sans-serif',
+                                cursor: 'pointer', letterSpacing: '0.5px',
+                                boxShadow: '0 4px 20px rgba(255,106,0,0.4)',
+                                opacity: disabled ? 0.55 : 1,
+                              }}
+                            >
+                              {boostBusy && boostingHotelId === h.id
+                                ? 'Activating…'
+                                : `🔥 ACTIVATE BOOST — ${boostingHotelId === h.id ? boostDuration : 1} HR`}
+                            </button>
+                          )
+                        })()}
                         <p style={{
                           fontSize: '10px', color: 'var(--fog)',
                           marginTop: '10px', lineHeight: 1.4, textAlign: 'center',
                         }}>
-                          One boost per hotel per day. Pricing TBD — your account will be billed when pricing is finalized.
+                          One boost per hotel per day.
                         </p>
                       </div>
                     )}

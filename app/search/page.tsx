@@ -349,12 +349,13 @@ function SearchResults() {
                         </div>
                       )}
 
-                      {/* Boost banner — only renders if the hotelier is currently boosted AND
-                          has set a discount price. Big discount price (boost_price) sits front
-                          and center; their regular nightly rate (price_min) is shown smaller
-                          with strike-through so drivers see the deal at a glance. The pulse
-                          pulls the eye to the price + CTA pair. */}
-                      {hotel.featured && hotel.boost_price && (
+                      {/* Boost banner — renders for any currently-boosted hotel.
+                          Content adapts to whether boost_price is set:
+                            - With price:  big $XX + crossed-out regular rate
+                            - Without:     '★ FEATURED' label, no $ amount
+                          Either way the banner pulses to draw eyes to the
+                          Call button below. */}
+                      {hotel.featured && (
                         <div className="boost-pulse" style={{
                           marginBottom: '10px',
                           padding: '14px 14px',
@@ -373,23 +374,27 @@ function SearchResults() {
                           }}>
                             🔥 LIMITED-TIME DEAL
                           </span>
-                          {/* Price stays centered/hero. Pitch sits to the right of the price block,
-                              3× the size of the original 11px message. */}
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                              <span style={{ fontSize: '28px', lineHeight: 1 }}>
-                                ${hotel.boost_price}
-                              </span>
-                              {hotel.price_min && hotel.price_min > hotel.boost_price && (
-                                <span style={{
-                                  fontSize: '14px', textDecoration: 'line-through',
-                                  opacity: 0.75, fontWeight: 600,
-                                }}>
-                                  ${hotel.price_min}
+                            {hotel.boost_price ? (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                                <span style={{ fontSize: '28px', lineHeight: 1 }}>
+                                  ${hotel.boost_price}
                                 </span>
-                              )}
-                              <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
-                            </div>
+                                {hotel.price_min && hotel.price_min > hotel.boost_price && (
+                                  <span style={{
+                                    fontSize: '14px', textDecoration: 'line-through',
+                                    opacity: 0.75, fontWeight: 600,
+                                  }}>
+                                    ${hotel.price_min}
+                                  </span>
+                                )}
+                                <span style={{ fontSize: '11px', fontWeight: 500, opacity: 0.85 }}>/ night</span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                                <span style={{ fontSize: '24px', lineHeight: 1, letterSpacing: '0.5px' }}>★ FEATURED</span>
+                              </div>
+                            )}
                             <div style={{
                               display: 'flex', alignItems: 'center', gap: '8px',
                               color: 'var(--night)', fontFamily: 'DM Sans, sans-serif', fontWeight: 800,
