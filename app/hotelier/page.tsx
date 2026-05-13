@@ -812,7 +812,7 @@ export default function HotelierPortal() {
                               fontFamily: 'Syne, sans-serif', boxSizing: 'border-box',
                             }}
                           />
-                          <p style={{ fontSize: '10px', color: 'var(--fog)', marginTop: '4px', lineHeight: 1.4 }}>
+                          <p style={{ fontSize: '14px', color: 'var(--mist)', marginTop: '8px', lineHeight: 1.45 }}>
                             {h.price_min > 0
                               ? `Must be less than your $${h.price_min} regular rate. Leave blank to boost without showing a price — drivers see "Call for rate" instead.`
                               : 'Leave blank to boost without showing a price — drivers see "Call for rate" instead.'}
