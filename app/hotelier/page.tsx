@@ -874,7 +874,7 @@ export default function HotelierPortal() {
                             >
                               {boostBusy && boostingHotelId === h.id
                                 ? 'Activating…'
-                                : `🔥 ACTIVATE BOOST — ${boostingHotelId === h.id ? boostDuration : 1} HR`}
+                                : '🔥 ACTIVATE BOOST'}
                             </button>
                           )
                         })()}
