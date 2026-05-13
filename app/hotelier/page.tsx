@@ -43,6 +43,10 @@ type RecentCall = {
   from_boost: boolean | null
   arrived_at: string | null
   closest_approach_mi: number | null
+  // Distance from driver to hotel at the moment they tapped Call.
+  // Snapshot of GPS state — null if the driver had GPS off, or if the
+  // call predates arrival tracking (rows logged before 2026-05-12).
+  initial_distance_mi: number | null
 }
 
 const AMENITY_OPTIONS = [
@@ -65,6 +69,11 @@ export default function HotelierPortal() {
   // Per-hotel last-5-calls list for the Recent Calls mini-log on each card.
   // Populated by loadAll alongside stats; same source of truth (call_logs).
   const [recentCalls, setRecentCalls] = useState<Record<string, RecentCall[]>>({})
+  // Map of hotel id -> interstate name (e.g. 'I-87'). Looked up alongside
+  // recent calls so the Recent Calls mini-log can show 'from I-87' next to
+  // each row's distance. Kept separate from the Hotel type because that
+  // type is also used by the edit form, which doesn't need this.
+  const [hotelInterstate, setHotelInterstate] = useState<Record<string, string>>({})
   const [rate, setRate]             = useState(5)
   const [billingType, setBillingType] = useState<'per_call'|'monthly'>('per_call')
   // Hotelier portal has four "tabs":
@@ -181,10 +190,31 @@ export default function HotelierPortal() {
     const hotelIds = hotelList.map(h => h.id)
     const { data: callData } = hotelIds.length > 0
       ? await supabase.from('call_logs')
-          .select('hotel_id, called_at, from_boost, arrived_at, closest_approach_mi')
+          .select('hotel_id, called_at, from_boost, arrived_at, closest_approach_mi, initial_distance_mi')
           .in('hotel_id', hotelIds)
           .order('called_at', { ascending: false })
       : { data: [] as RecentCall[] }
+
+    // Look up the interstate name for each hotel (via its exit) so the
+    // Recent Calls mini-log can show 'from I-87 · 10.4 mi away'. We use
+    // a separate small query instead of joining on the main hotels select
+    // because the existing Hotel type doesn't carry exit/interstate fields
+    // and we don't want to disturb the form code that uses Hotel.
+    const exitIds = hotelList.map(h => h.exit_id).filter(Boolean) as string[]
+    const { data: hotelExits } = exitIds.length > 0
+      ? await supabase.from('exits').select('id, interstates(name)').in('id', exitIds)
+      : { data: [] as { id: string; interstates: { name: string } | null }[] }
+    const interstateByExit: Record<string, string> = {}
+    for (const e of (hotelExits || []) as { id: string; interstates: { name: string } | null }[]) {
+      if (e.interstates?.name) interstateByExit[e.id] = e.interstates.name
+    }
+    setHotelInterstate(
+      Object.fromEntries(
+        hotelList
+          .filter(h => h.exit_id && interstateByExit[h.exit_id])
+          .map(h => [h.id, interstateByExit[h.exit_id as string]])
+      )
+    )
 
     const calls = (callData || []) as RecentCall[]
     setHotels(hotelList)
@@ -323,7 +353,7 @@ export default function HotelierPortal() {
 
   async function logout() {
     await supabase.auth.signOut()
-    setHotelier(null); setHotels([]); setStats({}); setRecentCalls({}); setView('dashboard'); setMsg('')
+    setHotelier(null); setHotels([]); setStats({}); setRecentCalls({}); setHotelInterstate({}); setView('dashboard'); setMsg('')
   }
 
   function startEdit(hotel: Hotel) {
@@ -798,39 +828,62 @@ export default function HotelierPortal() {
                               const isYesterday = d.toDateString() === yesterday.toDateString()
                               const dayLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
                               const timeLabel = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                              // Best-effort 'where was the driver' line. We have
+                              // the hotel's interstate from the lookup map, and
+                              // initial_distance_mi snapshotted at tap time.
+                              // Both may be missing on older rows; we render
+                              // whatever's available, or hide the line entirely
+                              // when we have neither.
+                              const interstate = hotelInterstate[c.hotel_id]
+                              const dist = c.initial_distance_mi
+                              const hasOrigin = interstate || dist != null
                               return (
                                 <li key={i} style={{
-                                  display: 'flex', alignItems: 'center', gap: '8px',
+                                  display: 'flex', flexDirection: 'column', gap: '2px',
                                   fontSize: '13px', color: 'var(--white)',
-                                  padding: '6px 0',
+                                  padding: '8px 0',
                                   borderTop: i === 0 ? 'none' : '1px solid var(--border)',
                                 }}>
-                                  <span style={{ color: 'var(--mist)', minWidth: '100px' }}>
-                                    {dayLabel} <span style={{ color: 'var(--fog)' }}>{timeLabel}</span>
-                                  </span>
-                                  {c.from_boost && (
-                                    <span style={{
-                                      fontSize: '10px', background: 'rgba(245,166,35,0.15)',
-                                      color: 'var(--amber)', padding: '2px 7px',
-                                      borderRadius: '10px', fontWeight: 700,
-                                      border: '1px solid rgba(245,166,35,0.30)',
-                                    }}>
-                                      ★ boost
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span style={{ color: 'var(--mist)' }}>
+                                      {dayLabel} <span style={{ color: 'var(--fog)' }}>{timeLabel}</span>
                                     </span>
-                                  )}
-                                  {c.arrived_at && (
-                                    <span
-                                      title={c.closest_approach_mi != null
-                                        ? `Driver closed to ${c.closest_approach_mi.toFixed(2)} mi of your front door (GPS-verified).`
-                                        : 'GPS-verified arrival.'}
-                                      style={{
-                                        fontSize: '10px', background: 'rgba(34,197,94,0.15)',
-                                        color: '#22c55e', padding: '2px 7px',
+                                    {c.from_boost && (
+                                      <span style={{
+                                        fontSize: '10px', background: 'rgba(245,166,35,0.15)',
+                                        color: 'var(--amber)', padding: '2px 7px',
                                         borderRadius: '10px', fontWeight: 700,
-                                        border: '1px solid rgba(34,197,94,0.30)',
+                                        border: '1px solid rgba(245,166,35,0.30)',
                                       }}>
-                                      📍 arrived
-                                    </span>
+                                        ★ boost
+                                      </span>
+                                    )}
+                                    {c.arrived_at && (
+                                      <span
+                                        title={c.closest_approach_mi != null
+                                          ? `Driver closed to ${c.closest_approach_mi.toFixed(2)} mi of your front door (GPS-verified).`
+                                          : 'GPS-verified arrival.'}
+                                        style={{
+                                          fontSize: '10px', background: 'rgba(34,197,94,0.15)',
+                                          color: '#22c55e', padding: '2px 7px',
+                                          borderRadius: '10px', fontWeight: 700,
+                                          border: '1px solid rgba(34,197,94,0.30)',
+                                        }}>
+                                        📍 arrived
+                                      </span>
+                                    )}
+                                  </div>
+                                  {hasOrigin && (
+                                    <div style={{ fontSize: '12px', color: 'var(--fog)' }}>
+                                      Driver called from
+                                      {interstate && <span style={{ color: 'var(--mist)', fontWeight: 600 }}> {interstate}</span>}
+                                      {dist != null && (
+                                        <>
+                                          {interstate ? ' · ' : ' '}
+                                          <span style={{ color: 'var(--mist)', fontWeight: 600 }}>{dist.toFixed(1)} mi away</span>
+                                        </>
+                                      )}
+                                    </div>
                                   )}
                                 </li>
                               )
