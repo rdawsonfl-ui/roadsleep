@@ -1,9 +1,12 @@
 'use client'
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 // Site footer. Pulls the contact email from the `settings` table so future
-// owners can swap it from /admin without touching code.
+// owners can swap it from /admin without touching code. Also surfaces the
+// Privacy + Terms links — required to be discoverable from every page
+// for both CCPA (California) and the GDPR if EU users browse.
 export default function SiteFooter() {
   const [email, setEmail] = useState<string>('')
 
@@ -31,7 +34,19 @@ export default function SiteFooter() {
           {email}
         </a>
       )}
-      <div style={{ marginTop: '14px', fontSize: '10px', opacity: 0.6 }}>
+      <div style={{
+        marginTop: '14px', display: 'flex', justifyContent: 'center',
+        gap: '14px', fontSize: '11px',
+      }}>
+        <Link href="/privacy" style={{ color: 'var(--fog)', textDecoration: 'none' }}>
+          Privacy
+        </Link>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <Link href="/terms" style={{ color: 'var(--fog)', textDecoration: 'none' }}>
+          Terms
+        </Link>
+      </div>
+      <div style={{ marginTop: '10px', fontSize: '10px', opacity: 0.6 }}>
         © {new Date().getFullYear()} RoadSleep<sup style={{ fontSize: '0.7em', marginLeft: '1px' }}>™</sup>
       </div>
     </footer>

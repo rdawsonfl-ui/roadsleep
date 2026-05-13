@@ -3,6 +3,8 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/app/components/SiteFooter'
 import { getDrivingDistances } from '@/lib/mapbox'
+import { getTrackConsent } from '@/lib/consent'
+import { ConsentModal } from '@/components/ConsentModal'
 
 type Hotel = {
   id: string
@@ -298,6 +300,16 @@ export default function HomePage() {
   // null = no modal open. Holds the Hotel + the generated code so the
   // code stays stable while the modal is up.
   const [boostRateModal, setBoostRateModal] = useState<{ hotel: Hotel; code: string } | null>(null)
+  // When the driver taps Call on a boosted hotel and we haven't yet
+  // recorded their tracking-consent choice, we park the pending call
+  // info here and pop the ConsentModal. Once they choose, the modal
+  // calls back into resumePendingCall() which logs + (optionally)
+  // starts trackApproach. Without this state we'd have to refactor
+  // the inline async-onClick handler into a named function and
+  // thread state through it — this is simpler.
+  const [pendingCall, setPendingCall] = useState<{
+    hotel: Hotel; initialDist: number | null; hLat: number; hLng: number;
+  } | null>(null)
   const [loading, setLoading] = useState(true)
   // NOTE: a max-price slider used to live here. Pulled because the price
   // data we have on hotels is not consistently up-to-date — filtering on
@@ -1806,25 +1818,35 @@ export default function HomePage() {
                 </p>
               </div>
 
-              {/* Action: tap to call. This is what actually dials AND
-                  logs the call. The href is a tel: link; onClick fires
-                  before navigation so the call_logs row gets written. */}
+              {/* Action: tap to call. This dials AND logs the call AND
+                  starts arrival tracking IF the driver has previously
+                  granted tracking consent. If they're a first-time user
+                  with no consent on file, we preventDefault the tel:
+                  navigation, stash the call params in pendingCall, and
+                  show the ConsentModal. After they decide, the modal
+                  fires resumePendingCall() which performs the appropriate
+                  branch and navigates to tel: programmatically. */}
               <a
                 href={`tel:${h.phone || ''}`}
-                onClick={async () => {
-                  // Snapshot the initial driver→hotel distance so the
-                  // dashboard can show 'closed from X to Y'. Distance lives
-                  // on h.distance (already computed earlier in the render);
-                  // null is fine if GPS was denied or hotel has no coords.
+                onClick={async (e) => {
                   const initialDist = h.distance ?? null
-                  // logCall returns the new row id; if we got one and the
-                  // hotel has coordinates, kick off background GPS tracking
-                  // for arrival proof. trackApproach is fire-and-forget;
-                  // it lives until arrival or 90 minutes elapse.
-                  const callId = await logCall(h.id, true, initialDist)
                   const hLat = h.latitude ?? h.exits?.lat
                   const hLng = h.longitude ?? h.exits?.lng
-                  if (callId && hLat != null && hLng != null) {
+                  const consent = getTrackConsent()
+                  if (consent === null && hLat != null && hLng != null) {
+                    // First-time user. Block the dial and ask them.
+                    e.preventDefault()
+                    setPendingCall({
+                      hotel: h,
+                      initialDist,
+                      hLat: Number(hLat),
+                      hLng: Number(hLng),
+                    })
+                    return
+                  }
+                  // Decided already. Proceed inline as before.
+                  const callId = await logCall(h.id, true, initialDist)
+                  if (consent === 'allow' && callId && hLat != null && hLng != null) {
                     trackApproach(callId, Number(hLat), Number(hLng))
                   }
                   // Don't close immediately — let driver come back from
@@ -1845,6 +1867,33 @@ export default function HomePage() {
           </div>
         )
       })()}
+
+      {/* Just-in-time tracking consent modal. Shows the first time a
+          driver triggers arrival tracking (boost-modal Call tap). After
+          they choose, the choice persists in localStorage and the modal
+          never reappears for that device unless they reset it on the
+          /privacy page. */}
+      {pendingCall && (
+        <ConsentModal
+          hotelName={pendingCall.hotel.name}
+          onDecide={async (choice) => {
+            const { hotel, initialDist, hLat, hLng } = pendingCall
+            setPendingCall(null)
+            // Always log the call — the hotelier still earns the tap.
+            // Only the GPS tracking depends on consent.
+            const callId = await logCall(hotel.id, true, initialDist)
+            if (choice === 'allow' && callId) {
+              trackApproach(callId, hLat, hLng)
+            }
+            // Now actually dial. We do this AFTER logging so the call_logs
+            // row reflects the tap even if the dialer takes focus before
+            // logCall finishes (rare with Supabase but worth being defensive).
+            if (hotel.phone) {
+              window.location.href = `tel:${hotel.phone}`
+            }
+          }}
+        />
+      )}
 
       <SiteFooter />
     </main>
