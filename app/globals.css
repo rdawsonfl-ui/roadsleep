@@ -195,6 +195,30 @@ h1, h2, h3, h4, h5 { font-family: 'Syne', sans-serif; font-weight: 700; }
   .boost-pulse-btn { animation: none; }
 }
 
+/* Mobile-only / desktop-only show-hide helpers for the hotelier boost panel.
+ *
+ * On phones, the boost panel needs to sit at the very top of /hotelier so
+ * the hotelier can tap Activate without scrolling past header + tabs +
+ * hotel card metadata. On laptops there's plenty of vertical room so the
+ * existing in-card boost panel works fine and we leave the page layout
+ * alone.
+ *
+ * Implementation: render the boost panel twice in the DOM — once at the
+ * top of the page (.mobile-boost-only) and once inside the hotel card
+ * (.desktop-boost-only). CSS picks which one is visible. Each panel uses
+ * the same React state (boostPriceInput, boostDuration, etc.) so whichever
+ * is visible drives the same activateBoost() call.
+ *
+ * Breakpoint at 700px because at 700-800px the page already has enough
+ * vertical room for the in-card panel; the relocation only helps on
+ * actual phone screens. */
+.mobile-boost-only { display: block; }
+.desktop-boost-only { display: none; }
+@media (min-width: 700px) {
+  .mobile-boost-only { display: none; }
+  .desktop-boost-only { display: block; }
+}
+
 /* Admin hotel-card row — desktop stays side-by-side (info | actions),
    mobile stacks vertically so action buttons don't overlap the hotel name.
    Breakpoint at 640px matches typical phone widths. */

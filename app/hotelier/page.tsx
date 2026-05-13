@@ -689,6 +689,160 @@ export default function HotelierPortal() {
           </div>
         </div>
 
+        {/* ─── MOBILE-ONLY BOOST PANEL ─────────────────────────────────
+             Lives ABOVE the tab nav so on phones the hotelier opens
+             /hotelier and the pulsating Activate button is the first
+             interactive element on screen. Zero scroll to boost.
+             Hidden on screens >=700px (laptop layout already has plenty
+             of vertical room; in-card panel covers it there).
+
+             For now: targets hotels[0] only. Multi-hotel hoteliers
+             still see the in-card panel on phone via fallback below.
+             Promoting to a hotel-picker dropdown is on the to-do list. */}
+        {hotels.length === 1 && (() => {
+          const h = hotels[0]
+          if (isBoostedNow(h)) {
+            // Active boost — compact countdown card. Same gradient + text
+            // as the in-card version but stripped to essentials for phone.
+            return (
+              <div className="mobile-boost-only" style={{
+                background: 'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
+                color: 'var(--night)', borderRadius: '12px', padding: '14px 16px',
+                marginBottom: '14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: '12px', flexWrap: 'wrap',
+              }}>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                    🔥 Boost Active
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>
+                    {h.name}
+                  </div>
+                </div>
+                <button
+                  onClick={() => endBoost(h)}
+                  disabled={boostBusy}
+                  style={{
+                    background: 'var(--night)', color: 'var(--white)',
+                    border: 'none', padding: '8px 14px', borderRadius: '8px',
+                    fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  }}
+                >
+                  End Boost
+                </button>
+              </div>
+            )
+          }
+          if (hasUsedBoostToday(h)) {
+            // Used today — compact "locked till tomorrow" badge. Smaller
+            // than the full panel since the hotelier can't act on it.
+            return (
+              <div className="mobile-boost-only" style={{
+                background: 'var(--night3)', border: '1px solid var(--border)',
+                borderRadius: '12px', padding: '12px 16px',
+                marginBottom: '14px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '13px', color: 'var(--mist)', fontWeight: 600 }}>
+                  ⏸ Today's boost used — available again tomorrow
+                </div>
+              </div>
+            )
+          }
+          // Eligible — full boost setup panel. Same structure as the
+          // in-card version so muscle memory carries over. State is
+          // shared (boostPriceInput, boostDuration, boostingHotelId)
+          // so whether the user interacts with this OR the in-card
+          // panel on a viewport-resize, the same activateBoost runs.
+          const trimmed = boostPriceInput.trim()
+          const hasPrice = trimmed !== ''
+          const priceNum = parseInt(trimmed, 10)
+          const priceInvalid = hasPrice && (!priceNum || priceNum <= 0)
+          const disabled = boostBusy || priceInvalid
+          return (
+            <div className="mobile-boost-only" style={{
+              background: 'linear-gradient(135deg, rgba(255,106,0,0.08) 0%, rgba(245,166,35,0.06) 100%)',
+              border: '2px solid rgba(255,106,0,0.35)',
+              borderRadius: '14px', padding: '16px',
+              marginBottom: '14px',
+            }}>
+              <div style={{
+                fontSize: '15px', fontWeight: 800, color: 'var(--white)',
+                fontFamily: 'Syne, sans-serif', marginBottom: '2px',
+                letterSpacing: '0.5px',
+              }}>
+                ⭐ Boost {h.name}
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--mist)', marginBottom: '12px', lineHeight: 1.4 }}>
+                Get featured to drivers right now. Set a rate or leave blank.
+              </p>
+
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--white)', display: 'block', marginBottom: '5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Boost price tonight <span style={{ color: 'var(--fog)', fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  value={boostingHotelId === h.id ? boostPriceInput : ''}
+                  onChange={e => { setBoostingHotelId(h.id); setBoostPriceInput(e.target.value) }}
+                  onFocus={() => setBoostingHotelId(h.id)}
+                  placeholder="e.g. 59"
+                  style={{
+                    width: '100%', background: 'var(--night)',
+                    border: '2px solid var(--border)',
+                    borderRadius: '10px', padding: '12px 14px',
+                    color: 'var(--white)', fontSize: '18px', fontWeight: 700,
+                    fontFamily: 'Syne, sans-serif', boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '10px', color: 'var(--white)', display: 'block', marginBottom: '5px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  Duration
+                </label>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {[1, 2, 3].map(hr => (
+                    <button
+                      key={hr}
+                      onClick={() => { setBoostingHotelId(h.id); setBoostDuration(hr as 1 | 2 | 3) }}
+                      style={{
+                        flex: 1, padding: '10px',
+                        background: (boostingHotelId === h.id && boostDuration === hr) ? 'var(--amber)' : 'var(--night)',
+                        color: (boostingHotelId === h.id && boostDuration === hr) ? 'var(--night)' : 'var(--white)',
+                        border: `2px solid ${(boostingHotelId === h.id && boostDuration === hr) ? 'var(--amber)' : 'var(--border)'}`,
+                        borderRadius: '10px', fontWeight: 800, fontSize: '14px',
+                        cursor: 'pointer', fontFamily: 'Syne, sans-serif',
+                      }}
+                    >
+                      {hr} HR
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => { setBoostingHotelId(h.id); activateBoost(h) }}
+                disabled={disabled}
+                className="boost-pulse-btn"
+                style={{
+                  width: '100%', padding: '16px',
+                  background: 'linear-gradient(135deg, #FF6A00 0%, #F5A623 100%)',
+                  color: '#FFFFFF', border: 'none', borderRadius: '12px',
+                  fontSize: '17px', fontWeight: 800, fontFamily: 'Syne, sans-serif',
+                  cursor: 'pointer', letterSpacing: '0.5px',
+                  boxShadow: '0 4px 20px rgba(255,106,0,0.4)',
+                  opacity: disabled ? 0.55 : 1,
+                }}
+              >
+                {boostBusy && boostingHotelId === h.id ? 'Activating…' : '🔥 ACTIVATE BOOST'}
+              </button>
+            </div>
+          )
+        })()}
+
         {/* Tab navigation. Two main hotelier views:
             - 📊 Performance: stats, boost attribution, GPS arrivals (was /dashboard)
             - 🏨 My Listings: hotel cards with edit/boost controls (was /hotelier)
@@ -785,14 +939,15 @@ export default function HotelierPortal() {
                     ))}
                   </div>
 
-                  {/* ─── BOOST CONTROL ─────────────────────────────────────────
-                       Three states drive the UI:
-                         (a) currently boosted → show countdown + End Now button
-                         (b) used today's boost (window over) → locked till tomorrow
-                         (c) eligible → "Boost This Listing" button (opens setup panel)
-                       Boost requires a discount price entry; we disable submission
-                       if it's missing or not lower than the regular rate.            */}
-                  <div style={{ marginTop:'14px', borderTop:'1px solid var(--border)', paddingTop:'14px' }}>
+                  {/* ─── BOOST CONTROL (DESKTOP) ───────────────────────────────
+                       On laptop, the boost panel lives inside the hotel card
+                       right here, like before — there's plenty of vertical
+                       space and keeping context with the hotel's stats is
+                       useful. On phone this wrapper hides (display: none)
+                       and a separate mobile boost panel renders at the top
+                       of the page above the tab bar; see search for
+                       "mobile-boost-only" earlier in this file. */}
+                  <div className="desktop-boost-only" style={{ marginTop:'14px', borderTop:'1px solid var(--border)', paddingTop:'14px' }}>
                     {isBoostedNow(h) ? (
                       <div style={{
                         background:'linear-gradient(90deg, var(--amber) 0%, var(--amber2) 100%)',
