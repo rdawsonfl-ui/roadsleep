@@ -107,3 +107,4 @@ NEXT_PUBLIC_MAPBOX_TOKEN=
 ## License
 
 Proprietary — all rights reserved. Contact owner for inquiries.
+
