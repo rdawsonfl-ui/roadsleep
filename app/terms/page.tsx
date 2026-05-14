@@ -102,8 +102,7 @@ export default function TermsPage() {
           <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>Boost is the only paid feature</h3>
           <p style={{ fontSize: '14px', color: 'var(--mist)', lineHeight: 1.6, marginBottom: '16px' }}>
             Hotels are listed for free. Featuring your listing for 1, 2, or 3 hours is
-            the paid product. You choose when and whether to boost. We don&apos;t
-            auto-charge you for anything else.
+            the paid product. You control when boost is active.
           </p>
 
           <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '6px' }}>Arrival data is your data</h3>
