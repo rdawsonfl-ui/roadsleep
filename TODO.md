@@ -1,7 +1,45 @@
 # RoadSleep — To-Do List
 
 Single source of truth for open work on RoadSleep. Updated as items ship.
-Last touched: 2026-05-18
+Last touched: 2026-05-28
+
+## 🌅 NEXT (tomorrow AM) — Google API to load verified hotels
+**The ask:** load hotels into roadsleep that are *verified* (not random scrape).
+
+What "verified" most likely means here (confirm at start of session):
+- **Google Places API** — Google's own business listings. Each Place has a
+  `business_status` ("OPERATIONAL"), a stable `place_id`, real reviews, hours,
+  photos, address, lat/lng. That's the standard for "verified."
+- Filter by `type=lodging` (and/or `hotel`) within a search area.
+
+What to think through BEFORE wiring:
+1. **Cost.** Google Places billing is per-call. Text Search ≈ $32 / 1000 calls,
+   Place Details ≈ $17 / 1000, Photos ≈ $7 / 1000. Free $200/mo credit covers
+   light usage but burns fast on autocomplete-style UX. Strategy: cache results
+   in Supabase (places_cache table) so we don't re-bill every refresh.
+2. **API key safety.** Browser-side key must be restricted (HTTP referrer +
+   API restriction = Places only) OR proxy through a serverless function with
+   the key in env vars. Proxy is safer for billing.
+3. **Search model.** "Near me" (geolocation) vs. "by city/route." For roadsleep
+   the route/city model makes more sense (planning a road trip).
+4. **What does the buyer/user actually need?** Probably: hotel name, photo,
+   price hint (Google doesn't give live rates — you'd need Booking.com/Expedia
+   affiliate APIs for that), rating, distance, address, one-tap call.
+
+Honest flag: Google Places does NOT include live nightly rates. If "verified
+hotels with prices" is the real ask, that's a SECOND integration (Booking
+affiliate, Expedia Rapid, or similar) and a real business decision. Confirm
+scope before building.
+
+Build plan (when we start):
+- [ ] Confirm exact "verified" definition with user
+- [ ] Confirm whether prices are needed (Places vs Places + affiliate)
+- [ ] Get Google Cloud project + Places API enabled + billing on
+- [ ] Restricted API key in roadsleep Vercel env
+- [ ] Serverless proxy `/api/hotels?lat=&lng=&radius=` (caches to Supabase)
+- [ ] Frontend: search box + results list with photos/rating/address
+
+---
 
 **Important framing:** RoadSleep is a SEPARATE asset from NFCSales,
 intended as a quick-flip exit for cash, not strategic to the portfolio.
