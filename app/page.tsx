@@ -478,6 +478,13 @@ export default function HomePage() {
   // Auto-falls-back to true when GPS denied or zero matches (driver is
   // far from any of our corridors, e.g. trip-planning from home).
   const [showAllInterstates, setShowAllInterstates] = useState<boolean>(false)
+  // Driver-trust default: only show hotels within 1.5 mi of their assigned
+  // exit. Anything farther stays hidden until the driver explicitly taps the
+  // "Show farther hotels" toggle. Reason: a tired driver who exits expecting
+  // a hotel "right there" and ends up driving 8 miles never trusts roadsleep
+  // again. Better to show fewer trustworthy options than risk that betrayal.
+  const [showFarHotels, setShowFarHotels] = useState<boolean>(false)
+  const NEAR_EXIT_MAX_MI = 1.5
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   // Throttled copy of userLoc that only updates when the driver has moved
   // more than 1 mi from the last anchor. Used as the dep for the Mapbox
@@ -1180,6 +1187,21 @@ export default function HomePage() {
     }
   }
 
+  // Off-exit distance gate (driver trust). By default, only show hotels
+  // within NEAR_EXIT_MAX_MI of their assigned exit. The tired-driver scenario
+  // is the worst trust failure roadsleep can have — exit expecting a hotel
+  // "right there," end up driving 8 miles into town. So default protects
+  // against it. Driver can opt in to wider results via the "Show farther
+  // hotels" toggle. NULL distance_from_exit_mi is kept (don't penalize the
+  // ~19 hotels where we couldn't compute it).
+  if (!showFarHotels) {
+    filtered = filtered.filter((h) => {
+      const off = h.distance_from_exit_mi
+      if (off == null) return true
+      return Number(off) <= NEAR_EXIT_MAX_MI
+    })
+  }
+
   // Sort cascade. Always closest-first.
   //   1. Boosted listings first (paid placement — preserved across all states)
   //   2. Distance ascending — closest hotel to the driver rises to top.
@@ -1773,9 +1795,38 @@ export default function HomePage() {
           )
         })}
 
+        {/* Show-farther toggle — driver-facing trust setting. By default we
+            only show ≤1.5 mi off-exit results because a tired driver who
+            exits expecting "right there" and ends up driving 10 mi never
+            uses roadsleep again. This toggle lets the driver opt in to
+            wider results when they want options. Subtle styling — it's
+            an escape hatch, not a primary action. */}
+        {!loading && (
+          <div style={{ padding: '14px 0 6px', textAlign: 'center' }}>
+            <button
+              onClick={() => setShowFarHotels(v => !v)}
+              style={{
+                background: 'transparent',
+                color: 'var(--fog)',
+                border: '1px solid var(--border)',
+                borderRadius: '999px',
+                padding: '7px 16px',
+                fontSize: '12px',
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: 'pointer',
+                letterSpacing: '0.2px',
+              }}
+            >
+              {showFarHotels
+                ? '✓ Showing all — tap to limit to ≤1.5 mi off exit'
+                : 'Within 1.5 mi of exit only — tap to show farther hotels'}
+            </button>
+          </div>
+        )}
+
         {!loading && filtered.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
-            🛣️ No {category === 'rv_park' ? 'RV parks' : 'hotels'} found. Try expanding your distance filter or tap {category === 'rv_park' ? 'Hotels' : 'RV Parks'} above.
+            🛣️ No {category === 'rv_park' ? 'RV parks' : 'hotels'} found {!showFarHotels && 'within 1.5 mi of an exit'}. Try {!showFarHotels ? 'tapping "show farther hotels" above, or ' : ''}expanding your distance filter or tap {category === 'rv_park' ? 'Hotels' : 'RV Parks'} above.
           </div>
         )}
       </div>
