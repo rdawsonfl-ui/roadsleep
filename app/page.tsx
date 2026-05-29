@@ -478,13 +478,6 @@ export default function HomePage() {
   // Auto-falls-back to true when GPS denied or zero matches (driver is
   // far from any of our corridors, e.g. trip-planning from home).
   const [showAllInterstates, setShowAllInterstates] = useState<boolean>(false)
-  // Driver-trust default: only show hotels within 1.5 mi of their assigned
-  // exit. Anything farther stays hidden until the driver explicitly taps the
-  // "Show farther hotels" toggle. Reason: a tired driver who exits expecting
-  // a hotel "right there" and ends up driving 8 miles never trusts roadsleep
-  // again. Better to show fewer trustworthy options than risk that betrayal.
-  const [showFarHotels, setShowFarHotels] = useState<boolean>(false)
-  const NEAR_EXIT_MAX_MI = 1.5
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
   // Throttled copy of userLoc that only updates when the driver has moved
   // more than 1 mi from the last anchor. Used as the dep for the Mapbox
@@ -1187,30 +1180,21 @@ export default function HomePage() {
     }
   }
 
-  // Off-exit distance gate (driver trust). By default, only show hotels
-  // within NEAR_EXIT_MAX_MI of their assigned exit. The tired-driver scenario
-  // is the worst trust failure roadsleep can have — exit expecting a hotel
-  // "right there," end up driving 8 miles into town. So default protects
-  // against it. Driver can opt in to wider results via the "Show farther
-  // hotels" toggle. NULL distance_from_exit_mi is kept (don't penalize the
-  // ~19 hotels where we couldn't compute it).
-  if (!showFarHotels) {
-    filtered = filtered.filter((h) => {
-      const off = h.distance_from_exit_mi
-      if (off == null) return true
-      return Number(off) <= NEAR_EXIT_MAX_MI
-    })
-  }
+  // Off-exit distance: hotels stay in the list regardless of how far they
+  // are from their exit, but the sort below promotes closer-to-exit hotels
+  // to the top of each exit cluster. Earlier we tried hard-filtering to
+  // ≤1.5 mi but drivers in sparse regions saw empty lists. Sort-bias
+  // preserves coverage AND solves the "tricked into a 10-mile detour"
+  // problem by making the easy detour always the first option at each exit.
 
   // Sort cascade. Always closest-first.
   //   1. Boosted listings first (paid placement — preserved across all states)
-  //   2. Distance ascending — closest hotel to the driver rises to top.
-  //   3. Listings with no distance data sink to the end.
-  //
-  // (Previously the sort was "distance-from-slider-target" — slider at 500
-  // put hotels around 500 mi at the top. That confused drivers who expected
-  // a normal closest-first list. Slider is now pure max-cap; ranking is
-  // pure closest-first.)
+  //   2. Distance from DRIVER ascending — closest hotel to the driver rises.
+  //   3. Within hotels at the same exit (same driver-distance ±0.1mi), the
+  //      one CLOSEST TO THE EXIT rises. This is the real driver-trust win:
+  //      at MM 131 with three hotels, the 0.4-mi-off-exit one ranks above
+  //      the 8-mi-off-exit one. Tired drivers see the easy detour first.
+  //   4. Listings with no distance data sink to the end.
   filtered.sort((a, b) => {
     if (a.featured !== b.featured) return a.featured ? -1 : 1
 
@@ -1219,8 +1203,19 @@ export default function HomePage() {
     const aDist = a.distance ?? a.exits?.mile_marker ?? Number.POSITIVE_INFINITY
     const bDist = b.distance ?? b.exits?.mile_marker ?? Number.POSITIVE_INFINITY
 
-    if (aDist === bDist) return 0
-    return Number(aDist) - Number(bDist)
+    // When driver-distance is meaningfully different, that's the primary
+    // ranking. Use a 0.1 mi tolerance so floating-point noise doesn't
+    // accidentally flip the tiebreaker we actually want to apply below.
+    if (Math.abs(Number(aDist) - Number(bDist)) > 0.1) {
+      return Number(aDist) - Number(bDist)
+    }
+
+    // Driver-distance is effectively tied → same exit (or very close).
+    // Tiebreaker: closer-to-exit hotel rises. NULL off-exit sinks to bottom
+    // of this cluster so we don't reward hotels with missing data.
+    const aOff = a.distance_from_exit_mi != null ? Number(a.distance_from_exit_mi) : Number.POSITIVE_INFINITY
+    const bOff = b.distance_from_exit_mi != null ? Number(b.distance_from_exit_mi) : Number.POSITIVE_INFINITY
+    return aOff - bOff
   })
 
   return (
@@ -1795,38 +1790,9 @@ export default function HomePage() {
           )
         })}
 
-        {/* Show-farther toggle — driver-facing trust setting. By default we
-            only show ≤1.5 mi off-exit results because a tired driver who
-            exits expecting "right there" and ends up driving 10 mi never
-            uses roadsleep again. This toggle lets the driver opt in to
-            wider results when they want options. Subtle styling — it's
-            an escape hatch, not a primary action. */}
-        {!loading && (
-          <div style={{ padding: '14px 0 6px', textAlign: 'center' }}>
-            <button
-              onClick={() => setShowFarHotels(v => !v)}
-              style={{
-                background: 'transparent',
-                color: 'var(--fog)',
-                border: '1px solid var(--border)',
-                borderRadius: '999px',
-                padding: '7px 16px',
-                fontSize: '12px',
-                fontFamily: "'DM Sans', sans-serif",
-                cursor: 'pointer',
-                letterSpacing: '0.2px',
-              }}
-            >
-              {showFarHotels
-                ? '✓ Showing all — tap to limit to ≤1.5 mi off exit'
-                : 'Within 1.5 mi of exit only — tap to show farther hotels'}
-            </button>
-          </div>
-        )}
-
         {!loading && filtered.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
-            🛣️ No {category === 'rv_park' ? 'RV parks' : 'hotels'} found {!showFarHotels && 'within 1.5 mi of an exit'}. Try {!showFarHotels ? 'tapping "show farther hotels" above, or ' : ''}expanding your distance filter or tap {category === 'rv_park' ? 'Hotels' : 'RV Parks'} above.
+            🛣️ No {category === 'rv_park' ? 'RV parks' : 'hotels'} found. Try expanding your distance filter or tap {category === 'rv_park' ? 'Hotels' : 'RV Parks'} above.
           </div>
         )}
       </div>
