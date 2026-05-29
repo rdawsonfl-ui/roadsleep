@@ -86,6 +86,13 @@ function AdminPageContent() {
   // find one row is painful; this turns the list into a usable lookup tool.
   const [listingSearch, setListingSearch] = useState('')
 
+  // When true, the listings list also shows hotels with hidden=true. Default
+  // false because admin usually wants to see what drivers see. Flip on when
+  // triaging the auto-hidden batch (closed, no-phone, bad lat/lng) to decide
+  // which to call/unhide. The pill on each hotel card makes it obvious which
+  // rows are hidden so this filter doesn't obscure that state.
+  const [showHidden, setShowHidden] = useState<boolean>(false)
+
   // Testing-mode toggle. When ON, drivers see ALL listings (verified +
   // unverified). When OFF (production), only verified=true show. The green
   // '✔ Front desk confirmed' badge stays bound to verified=true regardless,
@@ -117,25 +124,34 @@ function AdminPageContent() {
   }
 
   async function loadAll() {
-    const [{ data: hotelsOnly }, { data: rvOnly }, { data: i }, { data: e }, { data: ht }, { data: cl }] = await Promise.all([
-      // Supabase PostgREST silently caps responses at 1000 rows even when
-      // .range() asks for more. Total listings (1,184) exceed that cap, so
-      // earlier .range(0, 4999) approach was getting truncated and the most
-      // recently added hotels (I-80 batch) were vanishing from admin.
-      // Fix: split into two type-filtered queries — hotels-only (~940 rows)
-      // and rv_parks-only (~244 rows). Each is under 1000 individually so
-      // both come back complete. Merge the arrays before sorting.
-      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'hotel').limit(1000),
+    // Hotels-only is now paginated because we crossed 1000 rows. Supabase
+    // PostgREST caps each response at 1000 — .range(0, 4999) on a single
+    // request does NOT bypass that cap, the result silently truncates.
+    // Solution: page through with two explicit ranges (0..999, 1000..1999).
+    // Each individual request stays under the cap; the merged array is
+    // complete. At ~1600 hotels today, two pages cover us with plenty of
+    // headroom. When this hits 2000, add a third page or convert to a
+    // while-loop that pages until an empty response. RV parks stay a
+    // single query because they're ~360 rows — well under the cap.
+    const [hotelsPg1, hotelsPg2, rvResp, intResp, exitsResp, htResp, clResp] = await Promise.all([
+      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'hotel').range(0, 999),
+      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'hotel').range(1000, 1999),
       supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'rv_park').limit(1000),
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker').range(0, 4999),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
       // Pull hotel_id + called_at + from_boost + arrival fields so we can
-      // compute boost attribution + GPS arrival stats globally and per-hotel.
-      // hotelier_id stays so the Hoteliers tab works.
+      // compute boost attribution + per-hotel call totals + the timeline
+      // modal. hotelier_id stays so the Hoteliers tab works.
       supabase.from('call_logs').select('hotel_id, hotelier_id, called_at, from_boost, arrived_at, closest_approach_mi, initial_distance_mi'),
     ])
-    const h = [...(hotelsOnly || []), ...(rvOnly || [])]
+    const hotelsOnly = [...(hotelsPg1.data || []), ...(hotelsPg2.data || [])]
+    const rvOnly = rvResp.data
+    const i = intResp.data
+    const e = exitsResp.data
+    const ht = htResp.data
+    const cl = clResp.data
+    const h = [...hotelsOnly, ...(rvOnly || [])]
     if (h.length > 0) {
       // Sort geographically: interstate name → state → mile marker (ascending)
       // This way the admin list reads like driving the corridor north-to-south.
@@ -283,8 +299,14 @@ function AdminPageContent() {
       type: form.type || 'hotel',
     }
     if (alsoVerify) {
+      // See toggleVerified — same multi-column write so the bold front-desk
+      // badge appears and any prior auto-hide is cleared.
+      const nowIso = new Date().toISOString()
       payload.verified = true
-      payload.last_verified_at = new Date().toISOString()
+      payload.last_verified_at = nowIso
+      payload.verified_at = nowIso
+      payload.verification_source = 'frontdesk'
+      payload.hidden = false
     }
     if (editId) {
       await supabase.from('hotels').update(payload).eq('id', editId)
@@ -360,14 +382,45 @@ function AdminPageContent() {
     await supabase.from('hotels').update({ featured: !val }).eq('id', id); loadAll()
   }
 
-  // Phone-verification toggle. Sets verified true + stamps last_verified_at when
-  // confirming, or clears the verified flag if you need to flag a stale record.
+  // Phone-verification toggle. When confirming, we record the verification in
+  // ALL the columns that matter — both the legacy boolean (verified +
+  // last_verified_at) AND the new richer schema added during the Google
+  // verification work:
+  //   verification_source = 'frontdesk'  — promotes the hotel from the
+  //     softer "Listed on Google · Operational" badge to the bold green
+  //     "✔ Front desk confirmed" badge on the driver-facing list.
+  //   verified_at                         — fresh timestamp (separate from
+  //     last_verified_at for now; both updated until the legacy column is
+  //     fully retired).
+  //   hidden = false                      — confirming by phone overrides
+  //     any prior auto-hide (closed, no-phone, etc.). If you JUST called
+  //     and it's a real hotel, it should be visible to drivers regardless
+  //     of stale Google data that hid it.
+  // When un-verifying, we clear the verified flag + timestamps + source
+  // so the hotel reverts to whatever Google says about it. We do NOT
+  // re-hide automatically — that's a separate explicit action.
   async function toggleVerified(id: string, val: boolean) {
     const next = !val
-    await supabase.from('hotels').update({
+    const nowIso = new Date().toISOString()
+    const update: Record<string, unknown> = {
       verified: next,
-      last_verified_at: next ? new Date().toISOString() : null,
-    }).eq('id', id)
+      last_verified_at: next ? nowIso : null,
+      verified_at: next ? nowIso : null,
+      verification_source: next ? 'frontdesk' : null,
+    }
+    if (next) update.hidden = false
+    await supabase.from('hotels').update(update).eq('id', id)
+    loadAll()
+  }
+
+  // Toggle hidden flag on a hotel. Used by admin to manually hide a hotel
+  // from drivers (suspicious, can't reach, etc.) or to unhide one that the
+  // Google verification pipeline auto-hid for reasons admin disagrees with.
+  // Hidden = true removes the hotel from /search and / driver views via
+  // baseSelect filter; the row stays in DB for audit + future unhide.
+  async function toggleHidden(id: string, val: boolean) {
+    const next = !val
+    await supabase.from('hotels').update({ hidden: next }).eq('id', id)
     loadAll()
   }
 
@@ -860,10 +913,31 @@ function AdminPageContent() {
                         fontFamily: 'inherit',
                       }}
                     />
+                    {/* Hidden-listings toggle. Off by default (admin sees what
+                        drivers see). Flip on when triaging the auto-hidden
+                        batch (closed/no-phone/bad-lat-lng). Each shown hidden
+                        row gets a red "🚫 Hidden" badge + Unhide button. */}
+                    <label style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      marginTop: '10px', fontSize: '12px', color: 'var(--mist)',
+                      cursor: 'pointer', userSelect: 'none',
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={showHidden}
+                        onChange={(e) => setShowHidden(e.target.checked)}
+                        style={{ cursor: 'pointer', accentColor: 'var(--amber)' }}
+                      />
+                      Show hidden listings
+                      <span style={{ color: 'var(--fog)', fontSize: '11px' }}>
+                        ({hotels.filter(h => (h.type || 'hotel') === adminCategory && h.hidden === true).length} hidden in this category)
+                      </span>
+                    </label>
                     {listingSearch.trim() !== '' && (() => {
                       const q = listingSearch.trim().toLowerCase()
                       const visible = hotels
                         .filter(h => (h.type || 'hotel') === adminCategory)
+                        .filter(h => showHidden || h.hidden !== true)
                         .filter(h => {
                           const hay = [
                             h.name, h.city, h.state, h.address, h.street_address,
@@ -892,6 +966,7 @@ function AdminPageContent() {
                   </div>
                   {hotels
                     .filter(h => (h.type || 'hotel') === adminCategory)
+                    .filter(h => showHidden || h.hidden !== true)
                     .filter(h => {
                       if (listingSearch.trim() === '') return true
                       const q = listingSearch.trim().toLowerCase()
@@ -921,16 +996,107 @@ function AdminPageContent() {
                             }}>
                               {h.type === 'rv_park' ? '🚐 RV' : '🏨 Hotel'}
                             </span>
+                            {/* Verification status mirroring the driver-facing
+                                badge logic. Three states surface differently
+                                so admin can tell at a glance what backed each
+                                verification:
+
+                                - bold green "✔ Front desk confirmed":
+                                  verified=true AND verification_source='frontdesk'
+                                  → admin (you) called and confirmed live.
+                                  Strongest possible signal; this is the badge
+                                  drivers see on the bold-green tier.
+
+                                - softer slate "Listed on Google · Operational":
+                                  verified=true AND verification_source='google'
+                                  → Google Places API confirmed the hotel is
+                                  OPERATIONAL but no human has called yet.
+                                  Visible to drivers with the secondary badge.
+
+                                - amber "✓ Verified" (no source recorded):
+                                  verified=true AND verification_source IS NULL
+                                  → legacy verifications from before the
+                                  two-tier work. Treat as unsourced; eligible
+                                  for a Phone Verify pass to promote.
+
+                                - red "⚠ Unverified · hidden from drivers":
+                                  verified=false → never confirmed by anyone.
+                                  Driver-facing list excludes these by default
+                                  (unless testing mode is on). */}
                             {h.verified ? (
-                              <span style={{
-                                fontSize: '10px', background: 'rgba(34,197,94,0.15)', color: '#22c55e',
-                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
-                              }}>✓ Verified</span>
+                              h.verification_source === 'frontdesk' ? (
+                                <span style={{
+                                  fontSize: '10px',
+                                  background: 'rgba(34,197,94,0.18)',
+                                  color: '#22c55e',
+                                  padding: '2px 7px', borderRadius: '10px', fontWeight: 700,
+                                  border: '1px solid rgba(34,197,94,0.40)',
+                                }}
+                                title="You confirmed this hotel by phone. Drivers see the bold front-desk badge.">
+                                  ✔ Front desk confirmed
+                                </span>
+                              ) : h.verification_source === 'google' ? (
+                                <span style={{
+                                  fontSize: '10px',
+                                  background: 'rgba(148,163,184,0.12)',
+                                  color: '#94a3b8',
+                                  padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                  border: '1px solid rgba(148,163,184,0.30)',
+                                }}
+                                title="Confirmed by Google Places API (status=OPERATIONAL). Drivers see the softer Google badge. Phone-verify this to promote to bold Front desk.">
+                                  G · Operational
+                                </span>
+                              ) : (
+                                <span style={{
+                                  fontSize: '10px',
+                                  background: 'rgba(245,166,35,0.15)',
+                                  color: 'var(--amber)',
+                                  padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                  border: '1px solid rgba(245,166,35,0.30)',
+                                }}
+                                title="Verified before the two-tier work landed. No verification_source recorded. Phone-verify to promote to bold Front desk.">
+                                  ✓ Verified (legacy)
+                                </span>
+                              )
                             ) : (
                               <span style={{
                                 fontSize: '10px', background: 'rgba(239,68,68,0.15)', color: '#ef4444',
                                 padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
                               }}>⚠ Unverified · hidden from drivers</span>
+                            )}
+                            {/* Closed-permanently pill. Shows when Google
+                                Places returned CLOSED_PERMANENTLY for this
+                                hotel. We auto-set hidden=true when that
+                                happens. Surfacing the reason here so admin
+                                doesn't have to guess why a row is hidden. */}
+                            {h.google_business_status === 'CLOSED_PERMANENTLY' && (
+                              <span style={{
+                                fontSize: '10px',
+                                background: 'rgba(239,68,68,0.10)',
+                                color: '#ef4444',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                border: '1px solid rgba(239,68,68,0.30)',
+                              }}
+                              title="Google Places reported this hotel as CLOSED_PERMANENTLY. Auto-hidden from drivers. Phone-verify to override if Google is wrong.">
+                                ⛔ Closed (Google)
+                              </span>
+                            )}
+                            {/* Hidden-from-drivers pill. Renders for any
+                                hidden=true row regardless of reason — closed,
+                                no-phone, bad lat/lng, or admin-toggled. The
+                                closed pill above is supplemental info; this
+                                one is the truth about driver visibility. */}
+                            {h.hidden === true && (
+                              <span style={{
+                                fontSize: '10px',
+                                background: 'rgba(239,68,68,0.20)',
+                                color: '#ef4444',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 700,
+                                border: '1px solid rgba(239,68,68,0.40)',
+                              }}
+                              title="Currently hidden from drivers. Use the Unhide button below to restore visibility.">
+                                🚫 Hidden
+                              </span>
                             )}
                             {/* All-time total calls received from anywhere in
                                 the app (home, search, hotel detail). Always
@@ -1066,6 +1232,28 @@ function AdminPageContent() {
                             </button>
                             <button onClick={() => toggleFeatured(h.id, h.featured)} style={btnGhost}>
                               {h.featured ? '★ Unboost' : '☆ Boost'}
+                            </button>
+                            {/* Hide/Unhide toggle. Separate from the
+                                Verify button because "verified=true" and
+                                "hidden=false" are now independent: a hotel
+                                can be verified but still hidden (admin
+                                hid it manually) or unverified but visible
+                                (testing mode). Showing this button always
+                                so admin has explicit control over driver
+                                visibility regardless of verification path. */}
+                            <button
+                              onClick={() => toggleHidden(h.id, h.hidden || false)}
+                              style={{
+                                ...btnGhost,
+                                color: h.hidden ? '#22c55e' : '#94a3b8',
+                                border: `1px solid ${h.hidden ? 'rgba(34,197,94,0.40)' : 'var(--border)'}`,
+                                background: h.hidden ? 'rgba(34,197,94,0.10)' : 'transparent',
+                              }}
+                              title={h.hidden
+                                ? 'Currently hidden from drivers. Click to restore.'
+                                : 'Currently visible to drivers. Click to hide.'}
+                            >
+                              {h.hidden ? '👁 Unhide' : '🚫 Hide'}
                             </button>
                             <button onClick={() => editHotel(h)} style={{ ...btnGhost, color: 'var(--blue)' }}>Edit</button>
                             <button onClick={() => deleteHotel(h.id)} style={{ ...btnGhost, color: 'var(--red)' }}>Del</button>
