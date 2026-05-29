@@ -26,6 +26,12 @@ type Hotel = {
   // shown above the Call/Go buttons. true = admin has personally called
   // and confirmed the front desk number works.
   verified?: boolean | null
+  // How this listing was verified. 'frontdesk' = a human called the front desk
+  // and confirmed (premium trust signal). 'google' = Google Places API says the
+  // business is OPERATIONAL — automated, not as strong, but still useful.
+  // null = not verified. Drives which badge (if any) renders above the Call
+  // button: Front desk gets the bold green badge, Google gets a lighter pill.
+  verification_source?: 'frontdesk' | 'google' | null
   // Structured address. We prefer these over the legacy single 'address'
   // field. Either source can be used to compose what we show / send to maps.
   street_address?: string | null
@@ -699,7 +705,7 @@ export default function HomePage() {
       // returns its full slice. Two pages cover up to 2000 rows; we'll
       // need to paginate further (or move to a smarter query) when the
       // platform crosses ~2000 hotels per category.
-      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))'
+      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))'
       const buildQuery = (start: number, end: number) => {
         let q = supabase
           .from('hotels')
@@ -707,6 +713,11 @@ export default function HomePage() {
           .eq('type', category)
           .not('name', 'is', null)
           .neq('name', '')
+          // Always exclude hotels we've explicitly hidden (e.g. Google flagged
+          // CLOSED_PERMANENTLY / CLOSED_TEMPORARILY). Drivers should never see
+          // these even in testing mode — risking a driver calling a closed
+          // hotel breaks trust faster than anything else.
+          .eq('hidden', false)
           .range(start, end)
         if (!showAll) {
           q = q.eq('verified', true)
@@ -1595,12 +1606,42 @@ export default function HomePage() {
                   </div>
                 </div>
               )}
-              {/* Trust signal — small green confirmation that the front desk
-                  has been called and verified. Only renders when verified=true.
-                  Sits directly above the action row so it directly modifies
-                  the perceived legitimacy of the Call button. NOT bold per
-                  spec; small text, secondary visual weight. */}
-              {h.verified && (
+              {/* Trust signal — two tiers, honest about source:
+                  • verification_source='frontdesk' → bold green "✔ Front desk
+                    confirmed" — a human called and confirmed the listing.
+                    Premium trust signal, RoadSleep's gold standard.
+                  • verification_source='google' → small slate "Listed on
+                    Google · Operational" pill — Google's automated business
+                    listing says the place is open. Useful but NOT the same as
+                    a human-confirmed call, so visually softer.
+                  • verified=true but no source → fall through to the front
+                    desk badge so legacy data still works.
+                  Only one renders at a time (front desk wins if both). Sits
+                  above the action row so it modifies the perceived legitimacy
+                  of the Call button. */}
+              {h.verified && h.verification_source === 'frontdesk' && (
+                <p style={{
+                  fontSize: '13px',
+                  color: '#22c55e',
+                  marginBottom: '8px',
+                  fontWeight: 500,
+                  letterSpacing: '0.2px',
+                }}>
+                  ✔ Front desk confirmed
+                </p>
+              )}
+              {h.verified && h.verification_source === 'google' && (
+                <p style={{
+                  fontSize: '12px',
+                  color: '#94a3b8',
+                  marginBottom: '8px',
+                  fontWeight: 500,
+                  letterSpacing: '0.2px',
+                }}>
+                  Listed on Google · Operational
+                </p>
+              )}
+              {h.verified && !h.verification_source && (
                 <p style={{
                   fontSize: '13px',
                   color: '#22c55e',
