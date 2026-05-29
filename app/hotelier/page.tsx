@@ -1160,20 +1160,17 @@ export default function HotelierPortal() {
                                         ★ boost
                                       </span>
                                     )}
-                                    {c.arrived_at && (
-                                      <span
-                                        title={c.closest_approach_mi != null
-                                          ? `Driver closed to ${c.closest_approach_mi.toFixed(2)} mi of your front door (GPS-verified).`
-                                          : 'GPS-verified arrival.'}
-                                        style={{
-                                          fontSize: '10px', background: 'rgba(34,197,94,0.15)',
-                                          color: '#22c55e', padding: '2px 7px',
-                                          borderRadius: '10px', fontWeight: 700,
-                                          border: '1px solid rgba(34,197,94,0.30)',
-                                        }}>
-                                        📍 arrived
-                                      </span>
-                                    )}
+                                    {/* The "📍 arrived" pill was removed 2026-05-29: it relied
+                                        on browser GPS continuing to sample for 90 minutes after
+                                        the tap, but iOS Safari kills background JS within ~30
+                                        seconds. So in practice 'arrived' only fired for the rare
+                                        driver who kept the tab foregrounded the whole drive —
+                                        making it a misleading signal on the dashboard. The
+                                        underlying arrived_at column is preserved in case a future
+                                        SMS-confirmation flow restores real arrival proof.
+                                        Today's honest proof is: timestamp + initial_distance_mi
+                                        (the "Driver called from X mi" line below). That data is
+                                        captured at tap-time, can't be faked, and shows real intent. */}
                                   </div>
                                   {hasOrigin && (
                                     <div style={{ fontSize: '12px', color: 'var(--fog)' }}>
