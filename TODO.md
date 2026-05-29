@@ -3,6 +3,30 @@
 Single source of truth for open work on RoadSleep. Updated as items ship.
 Last touched: 2026-05-28
 
+## 🎯 Arrival proof v2 — SMS confirmation (next session w/ Twilio)
+The "📍 arrived" pill was removed from the hotelier dashboard 2026-05-29
+because iOS Safari kills background JS within ~30s, so the 90-minute GPS
+tracker almost never completed. We were quietly showing misleading data.
+
+The honest replacement is SMS-back confirmation:
+1. Driver taps Call on boosted hotel → log timestamp + initial distance (already done)
+2. Compute ETA: (distance × 1.4) / 60mph. e.g. 12mi tap → 17min ETA
+3. At ETA + 5min, Twilio SMS the driver: "At Hampton Inn Tampa now? Tap → roadsleep.com/c/abc"
+4. They tap → page opens with live GPS → if within 0.5mi, write arrived_at
+5. Hotelier sees: "Driver tapped from 12.4mi · SMS-confirmed arrival 18min later"
+
+**Blocker:** Twilio + A2P 10DLC registration (same blocker as carsnfc SMS).
+**Cost:** $0.008/text, <$10/mo even at 1000 boost calls.
+**Capture rate:** probably 40-60%. But every confirmed arrival is REAL,
+vs the old tracker that was mostly noise.
+
+**Need to capture driver phone first** — currently we don't ask. Could add
+optional "we'll text you a 1-tap check-in to prove the boost worked" prompt
+right after they tap Call, NOT before (don't add friction to the actual call).
+arrived_at column is preserved on call_logs so this slots in cleanly later.
+
+---
+
 ## 🌅 NEXT (tomorrow AM) — Google API to load verified hotels
 **The ask:** load hotels into roadsleep that are *verified* (not random scrape).
 
