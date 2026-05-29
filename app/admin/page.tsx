@@ -51,6 +51,25 @@ function AdminPageContent() {
   // on call_logs, not the boost-window timestamp join). More accurate when
   // a hotel has been boosted multiple times.
   const [fromBoostCounts, setFromBoostCounts] = useState<Record<string, number>>({})
+  // Per-hotel call history for the drill-down modal. Mirrors the hotelier
+  // page's "Recent Calls" mini-log so admin can audit any hotel's call
+  // timeline (timestamp + boost flag + initial driver distance) without
+  // logging in as that hotelier. Populated in loadAll from the same cl
+  // array we already pull for the count stats — no extra query.
+  const [recentCallsByHotel, setRecentCallsByHotel] = useState<Record<string, Array<{
+    called_at: string
+    from_boost: boolean
+    initial_distance_mi: number | null
+  }>>>({})
+  // Hotel id -> interstate name. Needed to render "Driver called from I-75"
+  // on each row. Built once during loadAll from each hotel's exit's
+  // interstate. Hotels without an exit (rare, RV parks via near_interstate)
+  // just omit the I-X part of the line.
+  const [hotelInterstate, setHotelInterstate] = useState<Record<string, string>>({})
+  // Modal: when admin clicks a hotel's "N calls" pill, show the per-hotel
+  // call timeline. null = closed. Holds the hotel name for the title and
+  // the rows are looked up from recentCallsByHotel on render.
+  const [callsModal, setCallsModal] = useState<{ id: string; name: string } | null>(null)
   const [form, setForm] = useState({ ...emptyHotel })
   const [editId, setEditId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -163,16 +182,52 @@ function AdminPageContent() {
       // reset). The from_boost column is set at insert time by the
       // driver app, so it's accurate regardless of later boost edits.
       const fromBoostCounts: Record<string, number> = {}
+      // Per-hotel call list for the drill-down modal. Newest-first because
+      // that's what hoteliers see and what admin will care about (most
+      // recent activity at the top of the modal).
+      const callsByHotel: Record<string, Array<{
+        called_at: string
+        from_boost: boolean
+        initial_distance_mi: number | null
+      }>> = {}
       for (const c of cl) {
         if (c.hotel_id) {
           totals[c.hotel_id] = (totals[c.hotel_id] || 0) + 1
           if (c.from_boost === true) {
             fromBoostCounts[c.hotel_id] = (fromBoostCounts[c.hotel_id] || 0) + 1
           }
+          if (!callsByHotel[c.hotel_id]) callsByHotel[c.hotel_id] = []
+          callsByHotel[c.hotel_id].push({
+            called_at: c.called_at,
+            from_boost: c.from_boost === true,
+            initial_distance_mi: c.initial_distance_mi != null ? Number(c.initial_distance_mi) : null,
+          })
         }
+      }
+      // Sort each hotel's call list newest-first. The base call_logs query
+      // doesn't impose an order so we sort here to guarantee modal rows
+      // are chronological regardless of how the rows arrived.
+      for (const hid of Object.keys(callsByHotel)) {
+        callsByHotel[hid].sort((a, b) => +new Date(b.called_at) - +new Date(a.called_at))
       }
       setHotelCallTotals(totals)
       setFromBoostCounts(fromBoostCounts)
+      setRecentCallsByHotel(callsByHotel)
+
+      // Build hotel_id -> interstate name map from the hotels we already
+      // loaded. Each hotel's exit knows its interstate, so we just walk the
+      // hotels array once. RV parks linked to an interstate by near_interstate
+      // (not by exit) aren't handled here — they'll just omit the I-X part
+      // in the modal, which renders cleanly because the row code already
+      // gates the "from I-X" string on interstate being non-null.
+      if (h) {
+        const interMap: Record<string, string> = {}
+        for (const hotel of h) {
+          const iname = hotel.exits?.interstates?.name
+          if (iname) interMap[hotel.id] = iname
+        }
+        setHotelInterstate(interMap)
+      }
       if (h) {
         for (const hotel of h) {
           if (!hotel.boost_started_at || !hotel.boost_ends_at) continue
@@ -882,21 +937,44 @@ function AdminPageContent() {
                                 shown — even at zero — so admin can compare
                                 across hotels and spot dead inventory. Visually
                                 distinct (mist/blue tint) from the green boost
-                                pill so the two never blur together. */}
+                                pill so the two never blur together. When
+                                total > 0, the pill becomes a clickable button
+                                that opens a per-hotel timeline modal mirroring
+                                the hotelier dashboard's Recent Calls log
+                                (timestamp + ★ boost flag + "Driver called
+                                from I-X · N mi away"). At zero it stays a
+                                non-interactive span so we don't tease an
+                                empty modal. */}
                             {(() => {
                               const total = hotelCallTotals[h.id] || 0
+                              const sharedStyle = {
+                                fontSize: '10px',
+                                background: total > 0 ? 'rgba(99,179,237,0.10)' : 'rgba(255,255,255,0.04)',
+                                color: total > 0 ? '#63b3ed' : 'var(--fog)',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                border: `1px solid ${total > 0 ? 'rgba(99,179,237,0.25)' : 'var(--border)'}`,
+                              } as const
+                              const label = `📞 ${total} total call${total === 1 ? '' : 's'}`
+                              if (total === 0) {
+                                return (
+                                  <span
+                                    title="No calls yet for this hotel."
+                                    style={sharedStyle}>
+                                    {label}
+                                  </span>
+                                )
+                              }
                               return (
-                                <span
-                                  title="Total calls received from drivers across the entire app — boosted and organic combined."
+                                <button
+                                  onClick={() => setCallsModal({ id: h.id, name: h.name })}
+                                  title="Click to see each call with timestamp + driver distance (mirrors the hotelier dashboard view)."
                                   style={{
-                                    fontSize: '10px',
-                                    background: total > 0 ? 'rgba(99,179,237,0.10)' : 'rgba(255,255,255,0.04)',
-                                    color: total > 0 ? '#63b3ed' : 'var(--fog)',
-                                    padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
-                                    border: `1px solid ${total > 0 ? 'rgba(99,179,237,0.25)' : 'var(--border)'}`,
+                                    ...sharedStyle,
+                                    cursor: 'pointer',
+                                    fontFamily: 'inherit',
                                   }}>
-                                  📞 {total} total call{total === 1 ? '' : 's'}
-                                </span>
+                                  {label} →
+                                </button>
                               )
                             })()}
                             {h.featured && (() => {
@@ -1203,11 +1281,142 @@ function AdminPageContent() {
       </div>
 
 
-      {/* The per-hotel arrivals modal was removed along with the pill
-          that opened it. The 90-min GPS arrival tracker that wrote
-          arrived_at/closest_approach_mi rarely completed on iOS Safari,
-          so a 'GPS arrivals' modal would have shown mostly empty results
-          and one test row. Honest call: don't ship a feature that lies. */}
+      {/* Per-hotel call timeline modal. Opens when admin clicks a hotel's
+          📞 N total calls pill. Renders the same data the hotelier sees on
+          their own dashboard: every call to this hotel, newest first, with
+          timestamp + ★ boost flag (when from_boost=true) + "Driver called
+          from I-X · N mi away" line built from initial_distance_mi captured
+          at tap.
+
+          Honest reuse: the rows come from recentCallsByHotel which was
+          populated once during loadAll from the SAME cl array the stats
+          loops use. No extra Supabase query, no separate fetch on open —
+          the data is already in memory, the click just changes which slice
+          we show. Modal closes on backdrop click or × button.
+
+          What's NOT here: arrival proof, closest-approach distance, or any
+          "did the driver actually visit" data. Those columns still exist on
+          call_logs but rarely populated honestly (iOS Safari kills the
+          90-min tracker in ~30s). SMS-confirmation flow is the future
+          replacement — see TODO.md. */}
+      {callsModal && (() => {
+        const rows = recentCallsByHotel[callsModal.id] || []
+        return (
+          <div
+            onClick={() => setCallsModal(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 1000,
+              background: 'rgba(0,0,0,0.7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '20px',
+            }}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'var(--night2)',
+                border: '1px solid var(--border)',
+                borderRadius: '14px',
+                maxWidth: '520px', width: '100%',
+                maxHeight: '80vh',
+                overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+              }}>
+              <div style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px',
+              }}>
+                <div>
+                  <div style={{
+                    fontFamily: 'Syne, sans-serif',
+                    fontSize: '18px', fontWeight: 700, color: 'var(--white)',
+                    marginBottom: '4px',
+                  }}>
+                    {callsModal.name}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--fog)' }}>
+                    {rows.length} call{rows.length === 1 ? '' : 's'} on record · newest first
+                  </div>
+                </div>
+                <button
+                  onClick={() => setCallsModal(null)}
+                  aria-label="Close"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--fog)',
+                    cursor: 'pointer',
+                    fontSize: '22px', lineHeight: 1,
+                    padding: '4px 8px',
+                  }}>×</button>
+              </div>
+              <div style={{ padding: '12px 20px 20px', overflowY: 'auto' }}>
+                {rows.length === 0 ? (
+                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+                    No calls logged for this hotel.
+                  </div>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    {rows.map((c, i) => {
+                      const d = new Date(c.called_at)
+                      const now = new Date()
+                      const isToday = d.toDateString() === now.toDateString()
+                      const yesterday = new Date(now)
+                      yesterday.setDate(now.getDate() - 1)
+                      const isYesterday = d.toDateString() === yesterday.toDateString()
+                      const dayLabel = isToday
+                        ? 'Today'
+                        : isYesterday
+                          ? 'Yesterday'
+                          : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+                      const timeLabel = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                      const interstate = hotelInterstate[callsModal.id]
+                      const dist = c.initial_distance_mi
+                      const hasOrigin = interstate || dist != null
+                      return (
+                        <li key={i} style={{
+                          display: 'flex', flexDirection: 'column', gap: '2px',
+                          fontSize: '13px', color: 'var(--white)',
+                          padding: '10px 0',
+                          borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ color: 'var(--mist)' }}>
+                              {dayLabel} <span style={{ color: 'var(--fog)' }}>{timeLabel}</span>
+                            </span>
+                            {c.from_boost && (
+                              <span style={{
+                                fontSize: '10px', background: 'rgba(245,166,35,0.15)',
+                                color: 'var(--amber)', padding: '2px 7px',
+                                borderRadius: '10px', fontWeight: 700,
+                                border: '1px solid rgba(245,166,35,0.30)',
+                              }}>
+                                ★ boost
+                              </span>
+                            )}
+                          </div>
+                          {hasOrigin && (
+                            <div style={{ fontSize: '12px', color: 'var(--fog)' }}>
+                              Driver called from
+                              {interstate && <span style={{ color: 'var(--mist)', fontWeight: 600 }}> {interstate}</span>}
+                              {dist != null && (
+                                <>
+                                  {interstate ? ' · ' : ' '}
+                                  <span style={{ color: 'var(--mist)', fontWeight: 600 }}>{dist.toFixed(1)} mi away</span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </main>
   )
 }
