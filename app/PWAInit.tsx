@@ -38,10 +38,17 @@ type InstallPromptEvent = Event & {
 };
 
 export default function PWAInit() {
-  // Two distinct UIs: iOS Safari (manual share→add) vs Chrome/Edge (auto-prompt).
-  // Track separately so each can be dismissed independently.
+  // Three distinct UIs:
+  //   - iOS Safari hint (share → Add to Home Screen, manual)
+  //   - Android/desktop Chromium real install button (via beforeinstallprompt)
+  //   - Desktop hint with browser-aware copy when beforeinstallprompt isn't
+  //     ready in our 3s window (very common on desktop Chrome — its install
+  //     event is gated behind user-engagement heuristics that often don't
+  //     fire on first load). If beforeinstallprompt arrives LATER, the
+  //     installPrompt state upgrades the popup to the real button automatically.
   const [showIOSHint, setShowIOSHint] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [desktopFlavor, setDesktopFlavor] = useState<'chromium' | 'mac-safari' | null>(null);
 
   useEffect(() => {
     // -- Service worker registration --
@@ -87,10 +94,23 @@ export default function PWAInit() {
 
     const ua = navigator.userAgent;
     const isIOS = /iPhone|iPad|iPod/.test(ua);
+    // "Mobile" appears in Android UAs and most mobile UAs; we use !mobile as
+    // a rough desktop signal (along with !iOS which is checked separately).
+    const isMobile = /Mobile|Android/i.test(ua);
+    const isDesktop = !isIOS && !isMobile;
+    // Chromium-family covers Chrome, Edge, Brave, Opera, Arc, etc. — all of
+    // which support beforeinstallprompt AND show an install icon in the
+    // address bar that our hint can point at.
+    const isChromium = /Chrome|Chromium|Edg|OPR|Brave/i.test(ua);
+    // Mac Safari has its own install path (File → Add to Dock, macOS 14+).
+    // It never fires beforeinstallprompt, so we need a separate hint.
+    const isMacSafari = /Macintosh/.test(ua) && /Safari/.test(ua) && !isChromium;
 
     // For Chrome/Edge/Android: capture the beforeinstallprompt event. The OS
     // fires this when the site meets PWA install criteria (manifest, sw,
     // engaged user). We save it so we can fire `.prompt()` from our button.
+    // On desktop, this event may fire LATER than our 3s timer — that's fine,
+    // setInstallPrompt is unconditional and overrides whatever hint is shown.
     const onBeforeInstallPrompt = (e: Event) => {
       // Suppress the browser's default mini-banner so we can show our own
       // bigger, clearer prompt instead.
@@ -110,9 +130,25 @@ export default function PWAInit() {
       iosTimer = setTimeout(() => setShowIOSHint(true), SHOW_DELAY_MS);
     }
 
+    // Desktop fallback. On Chromium desktop, beforeinstallprompt MIGHT fire
+    // (eventually), but it's gated behind Chrome's user-engagement heuristics
+    // and frequently doesn't fire on the first 3s of a fresh visit. Show a
+    // browser-specific install hint so the user actually knows the app is
+    // installable. If beforeinstallprompt fires later, the installPrompt
+    // state overrides the desktop hint and shows the real Install button.
+    // Mac Safari gets a different hint pointing at File → Add to Dock.
+    let desktopTimer: ReturnType<typeof setTimeout> | null = null;
+    if (isDesktop && (isChromium || isMacSafari)) {
+      desktopTimer = setTimeout(
+        () => setDesktopFlavor(isMacSafari ? 'mac-safari' : 'chromium'),
+        SHOW_DELAY_MS,
+      );
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt);
       if (iosTimer) clearTimeout(iosTimer);
+      if (desktopTimer) clearTimeout(desktopTimer);
     };
   }, []);
 
@@ -238,6 +274,61 @@ export default function PWAInit() {
           onClick={() => {
             recordDismissal();
             setShowIOSHint(false);
+          }}
+          aria-label="Dismiss"
+          style={dismissButtonStyle}
+        >
+          ×
+        </button>
+      </div>
+    );
+  }
+
+  // Desktop fallback hint. Shown when beforeinstallprompt hasn't fired (yet)
+  // but we know the browser supports PWA install via manual user action.
+  // Two flavors:
+  //   chromium    → point at the install icon in the address bar (Chrome,
+  //                 Edge, Brave, Opera all show it in roughly the same spot:
+  //                 right edge of the URL bar, often "⊕" or a download arrow)
+  //   mac-safari  → point at File → Add to Dock (macOS 14+ Sonoma feature)
+  // If beforeinstallprompt fires later, the installPrompt branch above
+  // takes priority and replaces this hint with a real Install button.
+  if (desktopFlavor) {
+    const copy =
+      desktopFlavor === 'chromium' ? (
+        <>
+          Look for the install icon{' '}
+          <span aria-hidden="true" style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+            {/* Chromium install icon: monitor with down-arrow, approximates
+                the icon Chrome shows on the right side of the address bar. */}
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle' }}>
+              <rect x="1.5" y="2" width="13" height="9" rx="1" stroke="#FF6A00" strokeWidth="1.3" />
+              <path d="M8 5.5V8.5M8 8.5L6 6.5M8 8.5L10 6.5" stroke="#FF6A00" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M5.5 14H10.5" stroke="#FF6A00" strokeWidth="1.3" strokeLinecap="round" />
+              <path d="M8 11V14" stroke="#FF6A00" strokeWidth="1.3" strokeLinecap="round" />
+            </svg>
+          </span>{' '}
+          at the right end of your address bar, or open the browser menu and pick &quot;Install RoadSleep&quot;. Runs in its own window, no tab clutter.
+        </>
+      ) : (
+        <>
+          Open the <strong>File</strong> menu and choose <strong>Add to Dock</strong> to install RoadSleep<sup style={{ fontSize: '0.7em', marginLeft: '1px' }}>™</sup> as a real Mac app. Requires macOS Sonoma or newer.
+        </>
+      );
+    return (
+      <div role="dialog" aria-label="Install RoadSleep" style={sheetStyle}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, marginBottom: '4px' }}>
+            Install RoadSleep<sup style={{ fontSize: '0.65em', marginLeft: '1px' }}>™</sup>
+          </div>
+          <div style={{ color: 'rgba(245,245,245,0.78)', fontSize: '13px' }}>
+            {copy}
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            recordDismissal();
+            setDesktopFlavor(null);
           }}
           aria-label="Dismiss"
           style={dismissButtonStyle}
