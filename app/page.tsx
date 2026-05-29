@@ -32,6 +32,11 @@ type Hotel = {
   // null = not verified. Drives which badge (if any) renders above the Call
   // button: Front desk gets the bold green badge, Google gets a lighter pill.
   verification_source?: 'frontdesk' | 'google' | null
+  // Approximate miles from the assigned highway exit to the hotel. Computed
+  // as straight-line haversine × 1.4 (standard short-trip circuity factor).
+  // Accurate to within ~0.3 mi at short ranges. Helps a driver decide whether
+  // to detour — "0.4 mi" is way different from "8 mi" even at the same exit.
+  distance_from_exit_mi?: number | null
   // Structured address. We prefer these over the legacy single 'address'
   // field. Either source can be used to compose what we show / send to maps.
   street_address?: string | null
@@ -705,7 +710,7 @@ export default function HomePage() {
       // returns its full slice. Two pages cover up to 2000 rows; we'll
       // need to paginate further (or move to a smarter query) when the
       // platform crosses ~2000 hotels per category.
-      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))'
+      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,distance_from_exit_mi,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))'
       const buildQuery = (start: number, end: number) => {
         let q = supabase
           .from('hotels')
@@ -1505,7 +1510,21 @@ export default function HomePage() {
               const mi = Number(h.distance_off_route_mi)
               return `${h.near_interstate.name} · ${mi < 1 ? '<1' : Math.round(mi)} mi off route`
             }
-            return h.exits ? `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}` : null
+            if (!h.exits) return null
+            // Base: "I-75 · MM 131 · Fort Myers, FL"
+            const base = `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}`
+            // Append off-exit distance when we computed it (helps a driver
+            // decide whether to detour — 0.4 mi vs 8 mi is genuinely
+            // different even at the same exit). Round to one decimal
+            // under 1 mi, otherwise round to nearest integer.
+            const off = h.distance_from_exit_mi != null ? Number(h.distance_from_exit_mi) : null
+            if (off != null && off >= 0) {
+              const offText = off < 0.2 ? 'at exit'
+                : off < 1 ? `${off.toFixed(1)} mi off exit`
+                : `${Math.round(off)} mi off exit`
+              return `${base} · ${offText}`
+            }
+            return base
           })()
           return (
             <div key={h.id} style={{ background: 'var(--night2)', border: h.featured ? '1px solid rgba(245,166,35,0.4)' : '1px solid var(--border)', borderRadius: '12px', padding: '14px', marginBottom: '12px' }}>
