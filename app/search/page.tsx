@@ -80,12 +80,17 @@ function SearchResults() {
       const { data: iData } = await supabase.from('interstates').select('*').eq('id', interstateId).single()
       if (iData) setInterstate(iData)
 
-      // Get ALL exits on this interstate in the chosen direction
+      // Get ALL exits on this interstate. We do NOT filter by the exits.direction
+      // column anymore — that column was inconsistently populated (most
+      // interstates only had rows stored for ONE direction, breaking the filter
+      // for the other). Direction is now decided geometrically: isAhead() below
+      // compares lat/lng against the driver's position. An "exit" is just a
+      // physical interchange — it serves both directions of travel — so this
+      // is also the correct mental model.
       const { data: exits } = await supabase
         .from('exits')
         .select('id, mile_marker, exit_label, city, state, lat, lng')
         .eq('interstate_id', interstateId)
-        .eq('direction', direction)
 
       if (!exits || exits.length === 0) { setHotels([]); setLoading(false); return }
 
