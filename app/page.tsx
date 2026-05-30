@@ -400,11 +400,22 @@ export default function HomePage() {
   // exit pair) so we can check "is this intersection AHEAD of the driver"
   // in their direction of travel. Symmetric: lookup works either direction.
   //
-  // Empty/unseeded corridors (I-4, I-5, I-20, I-30, I-85) have no entries
-  // because their exits aren't yet in the DB — handled correctly by the
-  // filter (those corridors have no listings to show anyway).
+  // I-4 intersections (Tampa for I-75, Daytona Beach for I-95) were added
+  // after I-4's exits/hotels landed in the DB. Empty/unseeded corridors
+  // (I-5, I-20, I-30, I-85) still have no entries because their exits
+  // aren't in the DB — handled correctly by the filter (those corridors
+  // have no listings to show anyway).
   type Intersection = { lat: number; lng: number; nearCity: string }
   const INTERSTATE_INTERSECTIONS: Record<string, Record<string, Intersection>> = {
+    'I-4': {
+      // I-4 ↔ I-75 closest exit pair was 7.77 mi (DB query): I-4's Tampa
+      // Downtown exit (27.9506, -82.4572) and I-75's Tampa exit (28.063,
+      // -82.456). Midpoint placed at the I-75/I-4 interchange near Tampa.
+      'I-75': { lat: 28.007, lng: -82.457, nearCity: 'Tampa' },
+      // I-4 ↔ I-95 closest pair was effectively 0 mi: both exits sit
+      // at the I-4/I-95 interchange in Daytona Beach (29.2108, -81.0228).
+      'I-95': { lat: 29.211, lng: -81.023, nearCity: 'Daytona Beach' },
+    },
     'I-10': {
       'I-65': { lat: 30.69, lng: -88.04, nearCity: 'Mobile' },
       'I-75': { lat: 30.19, lng: -82.64, nearCity: 'Lake City' },
@@ -429,6 +440,7 @@ export default function HomePage() {
       'I-95': { lat: 39.40, lng: -76.71, nearCity: 'Baltimore' },
     },
     'I-75': {
+      'I-4':  { lat: 28.007, lng: -82.457, nearCity: 'Tampa' },
       'I-10': { lat: 30.19, lng: -82.64, nearCity: 'Lake City' },
       'I-40': { lat: 35.96, lng: -83.92, nearCity: 'Knoxville' },
       'I-70': { lat: 39.78, lng: -84.20, nearCity: 'Dayton' },
@@ -446,6 +458,7 @@ export default function HomePage() {
       'I-95': { lat: 40.91, lng: -73.85, nearCity: 'Bronx' },
     },
     'I-95': {
+      'I-4':  { lat: 29.211, lng: -81.023, nearCity: 'Daytona Beach' },
       'I-10': { lat: 30.32, lng: -81.66, nearCity: 'Jacksonville' },
       'I-40': { lat: 35.78, lng: -78.64, nearCity: 'Raleigh' },
       'I-70': { lat: 39.40, lng: -76.71, nearCity: 'Baltimore' },
