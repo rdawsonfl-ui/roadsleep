@@ -18,7 +18,7 @@
 // which can take up to 24h on some browsers. Use Chrome DevTools >
 // Application > Service Workers > "Update on reload" while testing.
 
-const CACHE_VERSION = 'roadsleep-v4';
+const CACHE_VERSION = 'roadsleep-v5';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 
 // Pre-cache the absolute minimum to render the home screen shell when offline.
