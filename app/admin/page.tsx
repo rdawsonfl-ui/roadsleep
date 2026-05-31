@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase, type Hotel, type Interstate } from '@/lib/supabase'
 import AdminGate from './AdminGate'
 
-type Tab = 'hotels' | 'interstates' | 'hoteliers'
+type Tab = 'hotels' | 'hidden' | 'interstates' | 'hoteliers'
 
 const AMENITY_OPTIONS = [
   { key: 'truck_parking', label: '🚛 Truck Parking' },
@@ -92,6 +92,9 @@ function AdminPageContent() {
   // which to call/unhide. The pill on each hotel card makes it obvious which
   // rows are hidden so this filter doesn't obscure that state.
   const [showHidden, setShowHidden] = useState<boolean>(false)
+  // Free-text filter for the dedicated Hidden view (separate from the Listings
+  // tab's listingSearch so the two queues don't interfere with each other).
+  const [hiddenSearch, setHiddenSearch] = useState<string>('')
 
   // Testing-mode toggle. When ON, drivers see ALL listings (verified +
   // unverified). When OFF (production), only verified=true show. The green
@@ -123,20 +126,34 @@ function AdminPageContent() {
       .upsert({ key: 'show_unverified_to_drivers', value: next ? 'true' : 'false' }, { onConflict: 'key' })
   }
 
+  // Page through every hotel row of a given type, 1000 at a time, until a
+  // short page comes back. Supabase PostgREST caps each response at
+  // db-max-rows (1000) regardless of how wide the .range() span is, so a
+  // single big range silently truncates. The previous fix hard-coded exactly
+  // two pages (0..999, 1000..1999) — that quietly started dropping hotels the
+  // moment the 'hotel' type crossed 2000 rows. Looping until a page returns
+  // fewer than PAGE rows guarantees we load ALL of them no matter how large
+  // inventory grows. RV parks go through the same loop for the same safety.
+  async function fetchAllHotelsByType(type: string): Promise<any[]> {
+    const PAGE = 1000
+    const all: any[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('hotels')
+        .select('*, exits(*, interstates(*))')
+        .eq('type', type)
+        .range(from, from + PAGE - 1)
+      if (error || !data || data.length === 0) break
+      all.push(...data)
+      if (data.length < PAGE) break
+    }
+    return all
+  }
+
   async function loadAll() {
-    // Hotels-only is now paginated because we crossed 1000 rows. Supabase
-    // PostgREST caps each response at 1000 — .range(0, 4999) on a single
-    // request does NOT bypass that cap, the result silently truncates.
-    // Solution: page through with two explicit ranges (0..999, 1000..1999).
-    // Each individual request stays under the cap; the merged array is
-    // complete. At ~1600 hotels today, two pages cover us with plenty of
-    // headroom. When this hits 2000, add a third page or convert to a
-    // while-loop that pages until an empty response. RV parks stay a
-    // single query because they're ~360 rows — well under the cap.
-    const [hotelsPg1, hotelsPg2, rvResp, intResp, exitsResp, htResp, clResp] = await Promise.all([
-      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'hotel').range(0, 999),
-      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'hotel').range(1000, 1999),
-      supabase.from('hotels').select('*, exits(*, interstates(*))').eq('type', 'rv_park').limit(1000),
+    const [hotelsOnly, rvOnly, intResp, exitsResp, htResp, clResp] = await Promise.all([
+      fetchAllHotelsByType('hotel'),
+      fetchAllHotelsByType('rv_park'),
       supabase.from('interstates').select('*').order('name'),
       supabase.from('exits').select('*, interstates(name)').order('mile_marker').range(0, 4999),
       supabase.from('hoteliers').select('*').order('created_at', { ascending: false }),
@@ -145,8 +162,6 @@ function AdminPageContent() {
       // modal. hotelier_id stays so the Hoteliers tab works.
       supabase.from('call_logs').select('hotel_id, hotelier_id, called_at, from_boost, arrived_at, closest_approach_mi, initial_distance_mi'),
     ])
-    const hotelsOnly = [...(hotelsPg1.data || []), ...(hotelsPg2.data || [])]
-    const rvOnly = rvResp.data
     const i = intResp.data
     const e = exitsResp.data
     const ht = htResp.data
@@ -424,6 +439,37 @@ function AdminPageContent() {
     loadAll()
   }
 
+  // Reinstate a hidden listing: force hidden=false so it returns to driver
+  // search. Unconditional (unlike toggleHidden) — the Hidden view only ever
+  // wants to un-hide, so a dedicated one-way action keeps that button honest.
+  async function reinstate(id: string) {
+    await supabase.from('hotels').update({ hidden: false }).eq('id', id)
+    flash('Reinstated — visible to drivers again')
+    loadAll()
+  }
+
+  // "Verify-and-hide" sweep: every listing that is NOT phone/front-desk
+  // verified and not already hidden gets hidden in one pass, dropping it into
+  // the Hidden view as a triage queue. We build the id list from the already-
+  // loaded (and now COMPLETE — see fetchAllHotelsByType) hotels array so the
+  // count in the confirm dialog is exact, then update in chunks of 200 to keep
+  // the PostgREST in() filter URL well under length limits.
+  async function verifyAndHide() {
+    const targets = hotels.filter(h => h.verified !== true && h.hidden !== true)
+    if (targets.length === 0) { flash('Nothing to sweep — no unverified visible listings'); return }
+    if (!confirm(
+      `Hide ${targets.length} unverified listing${targets.length === 1 ? '' : 's'}?\n\n` +
+      `They move to the Hidden view and disappear from driver search immediately. ` +
+      `Nothing is deleted — reinstate any of them individually from the Hidden tab.`
+    )) return
+    const ids = targets.map(t => t.id)
+    for (let i = 0; i < ids.length; i += 200) {
+      await supabase.from('hotels').update({ hidden: true }).in('id', ids.slice(i, i + 200))
+    }
+    flash(`${targets.length} unverified listing${targets.length === 1 ? '' : 's'} moved to Hidden`)
+    loadAll()
+  }
+
   // Set the admin-only triage priority captured during the phone verification
   // call. Click the same priority again to clear it (toggle off).
   async function setPriority(id: string, current: string | null, next: 'high'|'medium'|'low') {
@@ -546,7 +592,7 @@ function AdminPageContent() {
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-          {(['hotels', 'interstates', 'hoteliers'] as Tab[]).map(t => (
+          {(['hotels', 'hidden', 'interstates', 'hoteliers'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none',
               color: tab === t ? 'var(--amber)' : 'var(--fog)',
@@ -554,7 +600,10 @@ function AdminPageContent() {
               padding: '10px 4px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', marginBottom: '-1px',
             }}>
-              {t === 'hotels' ? '🏨 Listings' : t === 'interstates' ? '🛣️ Interstates & Exits' : '👤 Hoteliers'}
+              {t === 'hotels' ? '🏨 Listings'
+                : t === 'hidden' ? `🚫 Hidden (${hotels.filter(h => h.hidden === true).length})`
+                : t === 'interstates' ? '🛣️ Interstates & Exits'
+                : '👤 Hoteliers'}
             </button>
           ))}
         </div>
@@ -1287,6 +1336,133 @@ function AdminPageContent() {
             </div>
           </>
         )}
+
+        {tab === 'hidden' && (() => {
+          // Every hidden listing across BOTH categories (hotels + RV parks),
+          // not just the active adminCategory — this is the single triage
+          // queue the whole "179 hidden" number refers to. Already geo-sorted
+          // upstream in loadAll, so we keep that order here.
+          const q = hiddenSearch.trim().toLowerCase()
+          const allHidden = hotels.filter(h => h.hidden === true)
+          const shown = q === '' ? allHidden : allHidden.filter(h => {
+            const hay = [
+              h.name, h.city, h.state, h.address, h.street_address, h.zip, h.phone,
+              h.exits?.city, h.exits?.state, h.exits?.interstates?.name,
+            ].filter(Boolean).join(' ').toLowerCase()
+            return hay.includes(q)
+          })
+          return (
+            <div style={{ ...cardStyle, padding: '20px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                <div>
+                  <h2 style={{ fontSize: '16px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '4px' }}>
+                    🚫 Hidden listings
+                  </h2>
+                  <p style={{ fontSize: '12px', color: 'var(--fog)', margin: 0 }}>
+                    {allHidden.length} listing{allHidden.length === 1 ? '' : 's'} hidden from driver search.
+                    Reinstate any of them — nothing here is deleted.
+                  </p>
+                </div>
+                {/* Verify-and-hide sweep: pulls every still-unverified visible
+                    listing into this queue in one pass. */}
+                <button
+                  onClick={verifyAndHide}
+                  style={{
+                    padding: '8px 14px', fontSize: '12px', fontWeight: 600,
+                    background: 'rgba(239,68,68,0.10)', color: '#ef4444',
+                    border: '1px solid rgba(239,68,68,0.40)', borderRadius: '8px',
+                    cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  }}
+                  title="Hide every listing that is not phone/front-desk verified. They land in this Hidden queue and drop out of driver search until reinstated."
+                >
+                  ↓ Sweep unverified into Hidden
+                </button>
+              </div>
+
+              {allHidden.length > 5 && (
+                <input
+                  className="dark-input"
+                  value={hiddenSearch}
+                  onChange={e => setHiddenSearch(e.target.value)}
+                  placeholder="Filter hidden listings by name, city, phone, interstate…"
+                  style={{
+                    width: '100%', padding: '10px 12px', fontSize: '13px',
+                    background: 'var(--night)', color: 'var(--white)',
+                    border: '1px solid var(--border)', borderRadius: '8px',
+                    outline: 'none', fontFamily: 'inherit', marginBottom: '12px',
+                  }}
+                />
+              )}
+
+              {shown.length === 0 ? (
+                <div style={{ padding: '28px 8px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
+                  {allHidden.length === 0
+                    ? 'No hidden listings. Everything is visible to drivers.'
+                    : 'No hidden listings match that filter.'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {shown.map(h => {
+                    const loc = [
+                      h.exits?.interstates?.name,
+                      h.exits?.mile_marker != null ? `MM ${h.exits.mile_marker}` : null,
+                      h.exits?.city || h.city,
+                      h.exits?.state || h.state,
+                    ].filter(Boolean).join(' · ')
+                    const closed = h.google_business_status === 'CLOSED_PERMANENTLY'
+                    return (
+                      <div key={h.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        gap: '12px', padding: '12px 14px', background: 'var(--night)',
+                        border: '1px solid var(--border)', borderRadius: '10px', flexWrap: 'wrap',
+                      }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--white)' }}>
+                              {h.name || '(unnamed)'}
+                            </span>
+                            {(h.type || 'hotel') === 'rv_park' && (
+                              <span style={{ fontSize: '10px', color: 'var(--fog)', border: '1px solid var(--border)', borderRadius: '8px', padding: '1px 6px' }}>RV</span>
+                            )}
+                            {closed && (
+                              <span style={{
+                                fontSize: '10px', background: 'rgba(239,68,68,0.10)', color: '#ef4444',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                border: '1px solid rgba(239,68,68,0.30)',
+                              }} title="Google Places reported CLOSED_PERMANENTLY.">⛔ Closed (Google)</span>
+                            )}
+                            {h.verified !== true && (
+                              <span style={{
+                                fontSize: '10px', background: 'rgba(245,158,11,0.10)', color: 'var(--amber)',
+                                padding: '2px 7px', borderRadius: '10px', fontWeight: 600,
+                                border: '1px solid rgba(245,158,11,0.30)',
+                              }} title="Not phone/front-desk verified.">⚠ Unverified</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--fog)', marginTop: '3px' }}>
+                            {loc || 'No exit linked'}{h.phone ? ` · ${h.phone}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => reinstate(h.id)}
+                          style={{
+                            padding: '8px 14px', fontSize: '12px', fontWeight: 600,
+                            background: 'rgba(34,197,94,0.10)', color: '#22c55e',
+                            border: '1px solid rgba(34,197,94,0.40)', borderRadius: '8px',
+                            cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                          }}
+                          title="Set hidden=false — restore this listing to driver search."
+                        >
+                          ✓ Reinstate
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {tab === 'interstates' && (
           <>
