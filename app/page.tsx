@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/app/components/SiteFooter'
 import { getDrivingDistances } from '@/lib/mapbox'
+import { getSource } from '@/lib/analytics'
 
 type Hotel = {
   id: string
@@ -163,6 +164,9 @@ async function logCall(
       // Column is nullable for backwards compatibility with rows logged
       // before this column existed.
       from_boost: fromBoost,
+      // Marketing channel the driver arrived through (billboard, QR, NFC,
+      // social, SEO), if any — captured on landing, null for direct traffic.
+      source: getSource(),
     }
     // Snapshot the distance at the moment of tap so the dashboard can show
     // 'closed from 12mi to 0.2mi' rather than just 'arrived'. Only meaningful

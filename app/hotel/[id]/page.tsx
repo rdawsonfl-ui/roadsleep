@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase, type Hotel } from '@/lib/supabase'
+import { getSource } from '@/lib/analytics'
 
 const AMENITY_ICONS: Record<string, string> = {
   truck_parking: '🚛', pets: '🐾', '24hr_checkin': '🌙', wifi: '📶', pool: '🏊',
@@ -49,6 +50,7 @@ export default function HotelPage() {
       hotel_id: hotel.id,
       hotelier_id: (hotel as any).hotelier_id || null,
       from_boost: boosted,
+      source: getSource(),
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
       referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 200) : null,
     }).then(() => {})

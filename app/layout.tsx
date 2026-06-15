@@ -11,6 +11,7 @@ import PWAInit from "./PWAInit";
 //   - Top referrers (Google, direct, social, etc.)
 // No cookies. No personal data. No setup beyond importing this component.
 import { Analytics } from "@vercel/analytics/react";
+import SourceTracker from "./components/SourceTracker";
 
 export const metadata: Metadata = {
   title: "RoadSleep™ – Find a Stop by Mile Marker",
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Nav />
         {children}
         <Analytics />
+        <SourceTracker />
         <PWAInit />
       </body>
     </html>

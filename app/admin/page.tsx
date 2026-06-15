@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { supabase, type Hotel, type Interstate } from '@/lib/supabase'
 import AdminGate from './AdminGate'
 
-type Tab = 'hotels' | 'hidden' | 'interstates' | 'hoteliers'
+type Tab = 'hotels' | 'hidden' | 'interstates' | 'hoteliers' | 'campaigns'
 
 const AMENITY_OPTIONS = [
   { key: 'truck_parking', label: '🚛 Truck Parking' },
@@ -103,7 +103,36 @@ function AdminPageContent() {
   const [testingMode, setTestingMode] = useState<boolean>(false)
   const [testingModeLoaded, setTestingModeLoaded] = useState<boolean>(false)
 
+  // Campaign attribution: source -> visits -> calls, computed client-side from
+  // campaign_visits (landings) and call_logs.source (tagged calls). Loaded
+  // lazily when the Campaigns tab is opened so we don't add work to every page.
+  const [campaignRows, setCampaignRows] = useState<{ source: string; visits: number; calls: number }[]>([])
+  const [campaignLoading, setCampaignLoading] = useState<boolean>(false)
+
+  async function loadCampaigns() {
+    setCampaignLoading(true)
+    const [visitsRes, callsRes] = await Promise.all([
+      supabase.from('campaign_visits').select('source'),
+      supabase.from('call_logs').select('source'),
+    ])
+    const map: Record<string, { visits: number; calls: number }> = {}
+    const bump = (s: string | null, key: 'visits' | 'calls') => {
+      const k = (s && s.trim()) || '(untagged)'
+      if (!map[k]) map[k] = { visits: 0, calls: 0 }
+      map[k][key]++
+    }
+    ;(visitsRes.data || []).forEach((r: any) => bump(r.source, 'visits'))
+    ;(callsRes.data || []).forEach((r: any) => bump(r.source, 'calls'))
+    const rows = Object.entries(map)
+      .map(([source, v]) => ({ source, visits: v.visits, calls: v.calls }))
+      .sort((a, b) => b.calls - a.calls || b.visits - a.visits)
+    setCampaignRows(rows)
+    setCampaignLoading(false)
+  }
+
   useEffect(() => { loadAll() }, [])
+
+  useEffect(() => { if (tab === 'campaigns') loadCampaigns() }, [tab])
 
   // Load the testing-mode setting on mount.
   useEffect(() => {
@@ -592,7 +621,7 @@ function AdminPageContent() {
 
         {/* Sub-tabs */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-          {(['hotels', 'hidden', 'interstates', 'hoteliers'] as Tab[]).map(t => (
+          {(['hotels', 'hidden', 'interstates', 'hoteliers', 'campaigns'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none',
               color: tab === t ? 'var(--amber)' : 'var(--fog)',
@@ -603,7 +632,8 @@ function AdminPageContent() {
               {t === 'hotels' ? '🏨 Listings'
                 : t === 'hidden' ? `🚫 Hidden (${hotels.filter(h => h.hidden === true).length})`
                 : t === 'interstates' ? '🛣️ Interstates & Exits'
-                : '👤 Hoteliers'}
+                : t === 'hoteliers' ? '👤 Hoteliers'
+                : '📣 Campaigns'}
             </button>
           ))}
         </div>
@@ -1641,6 +1671,65 @@ function AdminPageContent() {
               )}
             </div>
           </>
+        )}
+
+        {tab === 'campaigns' && (
+          <div>
+            <h2 style={{ fontSize: '16px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '4px' }}>
+              📣 Campaign Attribution
+            </h2>
+            <p style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '16px', lineHeight: 1.5 }}>
+              Tag any link, QR code, or billboard with a source and it shows up here as visits → calls,
+              so you can compare channels on cost-per-call. Use{' '}
+              <code style={{ color: 'var(--amber)' }}>roadsleep.com/?src=YOURTAG</code> or the short form{' '}
+              <code style={{ color: 'var(--amber)' }}>roadsleep.com/YOURTAG</code> — e.g.{' '}
+              <code style={{ color: 'var(--amber)' }}>roadsleep.com/i75</code> on an I-75 billboard,{' '}
+              <code style={{ color: 'var(--amber)' }}>roadsleep.com/pilot</code> on a fuel-desk card.
+            </p>
+
+            {campaignLoading ? (
+              <p style={{ color: 'var(--fog)', fontSize: '13px' }}>Loading…</p>
+            ) : campaignRows.length === 0 ? (
+              <p style={{ color: 'var(--fog)', fontSize: '13px' }}>
+                No traffic logged yet. Once a tagged link or QR is in the wild, visits and calls land here.
+              </p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--fog)' }}>
+                      <th style={{ padding: '8px 12px' }}>Source</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Visits</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Calls</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'right' }}>Call rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campaignRows.map(r => {
+                      const rate = r.visits > 0 ? Math.round((r.calls / r.visits) * 100) : null
+                      const untagged = r.source === '(untagged)'
+                      return (
+                        <tr key={r.source} style={{ borderBottom: '1px solid var(--border)', color: untagged ? 'var(--fog)' : 'var(--white)' }}>
+                          <td style={{ padding: '8px 12px', fontWeight: 600 }}>{r.source}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>{r.visits || '—'}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>{r.calls}</td>
+                          <td style={{ padding: '8px 12px', textAlign: 'right', color: 'var(--amber)' }}>
+                            {rate === null ? '—' : `${rate}%`}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <p style={{ fontSize: '11px', color: 'var(--fog)', marginTop: '10px', lineHeight: 1.5 }}>
+                  Visits = unique tagged landings per session. Calls = Call-button taps during a session
+                  that arrived with that tag. <strong style={{ color: 'var(--fog)' }}>(untagged)</strong> = calls
+                  with no source — direct traffic, organic, or logged before tracking went live (no visit row,
+                  so no rate).
+                </p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

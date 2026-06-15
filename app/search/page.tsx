@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { supabase, type Interstate } from '@/lib/supabase'
+import { getSource } from '@/lib/analytics'
 import HighwayView from './HighwayView'
 
 const AMENITY_ICONS: Record<string, string> = {
@@ -162,6 +163,7 @@ function SearchResults() {
       from_boost: fromBoost,
       initial_distance_mi: distanceMi,
       closest_approach_mi: distanceMi,
+      source: getSource(),
     }).then(() => {})
   }
   const toggle = (f: string) => setActiveFilters(p => p.includes(f) ? p.filter(x => x !== f) : [...p, f])
