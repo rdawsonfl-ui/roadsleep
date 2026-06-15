@@ -167,9 +167,16 @@ async function logCall(
     // Snapshot the distance at the moment of tap so the dashboard can show
     // 'closed from 12mi to 0.2mi' rather than just 'arrived'. Only meaningful
     // when we actually have a GPS fix; null otherwise.
-    if (fromBoost && initialDistanceMi != null) {
-      insert.initial_distance_mi = initialDistanceMi
-      insert.closest_approach_mi = initialDistanceMi
+    // Capture the driver's distance at tap for EVERY call, not just boosted
+    // ones — this is what populates 'avg miles at tap' on the hotelier report.
+    // The page already holds a live GPS fix from the nearby-hotel sort, so
+    // there's no extra permission prompt; we were simply discarding this on
+    // organic taps before. closest_approach seeds to the same value since
+    // there's no reliable post-call tracking on web.
+    if (initialDistanceMi != null) {
+      const d = Number(initialDistanceMi.toFixed(2))
+      insert.initial_distance_mi = d
+      insert.closest_approach_mi = d
     }
     const { data, error } = await supabase
       .from('call_logs').insert(insert).select('id').single()
@@ -1724,7 +1731,7 @@ export default function HomePage() {
                   return (
                     <a
                       href={`tel:${h.phone || ''}`}
-                      onClick={() => logCall(h.id, false)}
+                      onClick={() => logCall(h.id, false, h.distance ?? null)}
                       aria-label={`Call ${h.name}`}
                       style={{
                         flex: 2,

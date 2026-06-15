@@ -40,10 +40,17 @@ export default function HotelPage() {
   const interstate = exit?.interstates
 
   const trackCall = () => {
-    // Fire-and-forget — logs call for billing purposes
+    // Fire-and-forget — logs call for billing purposes. No GPS fix on this
+    // page (it's a direct detail view, not the geolocated list), so distance
+    // is intentionally left null rather than prompting for location here.
+    const boosted = !!((hotel as any).featured && (hotel as any).boost_ends_at
+      && new Date((hotel as any).boost_ends_at).getTime() > Date.now())
     supabase.from('call_logs').insert({
       hotel_id: hotel.id,
       hotelier_id: (hotel as any).hotelier_id || null,
+      from_boost: boosted,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
+      referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 200) : null,
     }).then(() => {})
   }
 

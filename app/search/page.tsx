@@ -154,11 +154,14 @@ function SearchResults() {
     return activeFilters.length === 0 || activeFilters.every(f => h.amenities?.includes(f))
   })
 
-  const trackCall = (hotelId: string) => {
+  const trackCall = (hotelId: string, distanceMi: number | null, fromBoost: boolean) => {
     supabase.from('call_logs').insert({
       hotel_id: hotelId,
       user_agent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : null,
       referrer: typeof document !== 'undefined' ? document.referrer.slice(0, 200) : null,
+      from_boost: fromBoost,
+      initial_distance_mi: distanceMi,
+      closest_approach_mi: distanceMi,
     }).then(() => {})
   }
   const toggle = (f: string) => setActiveFilters(p => p.includes(f) ? p.filter(x => x !== f) : [...p, f])
@@ -405,7 +408,17 @@ function SearchResults() {
 
                       {hotel.phone && (
                         <a href={`tel:${hotel.phone}`}
-                          onClick={(e) => { e.stopPropagation(); trackCall(hotel.id) }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const hlat = hotel.latitude ?? hotel.exits?.lat
+                            const hlng = hotel.longitude ?? hotel.exits?.lng
+                            const d = hasGPS && hlat != null && hlng != null
+                              ? Number(milesBetween(userLat, userLng, Number(hlat), Number(hlng)).toFixed(2))
+                              : null
+                            const boosted = !!(hotel.featured && hotel.boost_ends_at
+                              && new Date(hotel.boost_ends_at).getTime() > Date.now())
+                            trackCall(hotel.id, d, boosted)
+                          }}
                           className="btn-amber"
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
