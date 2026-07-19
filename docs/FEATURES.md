@@ -20,6 +20,19 @@ is anchored to a specific exit, on a specific interstate, at a specific mile
 marker. That single structural decision is what makes the rest of the product
 possible.
 
+**What that looks like to a driver.** It's 7:30 in the evening. You've been
+behind the wheel since morning, you're tired, and you need to stop — but not
+necessarily at the next exit, and not fifty miles further than you can stand.
+You open RoadSleep and slide the distance control. The list redraws as you move
+it: everything within ten miles ahead, then thirty, then sixty. You can see
+where you are in relation to what's coming up, and pick a stopping point that
+matches how much driving you have left in you.
+
+No searching. No typing a city name you'd have to guess at. No scrolling a
+travel site that wants to sell you a room three hundred miles away in a
+destination you're not going to. The road already knows where you are — the app
+just shows you what's in front of you and how far.
+
 Files: `app/page.tsx` (the main driver screen), `app/search/page.tsx`,
 `app/search/HighwayView.tsx`, `app/hotel/[id]/page.tsx`.
 
