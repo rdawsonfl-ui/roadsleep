@@ -25,6 +25,14 @@ const emptyHotel = {
   type: 'hotel' as 'hotel' | 'rv_park',
 }
 
+/** Numeric portion of an interstate label, for sorting. "I-75" -> 75.
+ *  Returns Number.MAX_SAFE_INTEGER for labels with no digits so they sort to
+ *  the end rather than colliding at 0 with each other. */
+function interstateNumber(label: string): number {
+  const m = label.match(/\d+/)
+  return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER
+}
+
 function AdminPageContent() {
   const [tab, setTab] = useState<Tab>('hotels')
   const [hotels, setHotels] = useState<any[]>([])
@@ -197,12 +205,24 @@ function AdminPageContent() {
     const cl = clResp.data
     const h = [...hotelsOnly, ...(rvOnly || [])]
     if (h.length > 0) {
-      // Sort geographically: interstate name → state → mile marker (ascending)
+      // Sort geographically: interstate → state → mile marker (ascending)
       // This way the admin list reads like driving the corridor north-to-south.
+      //
+      // Interstates sort NUMERICALLY, not as strings. A plain string compare
+      // puts I-10 before I-4 (because '1' < '4' character-by-character), which
+      // reads as broken to anyone scanning the list. We pull the digits out of
+      // the label and compare those, falling back to a string compare for any
+      // label that isn't in I-<number> form (US-1, state routes, etc.) so odd
+      // corridor names still order deterministically instead of colliding.
       const sorted = [...h].sort((a, b) => {
         const intA = a.exits?.interstates?.name || 'zzz'
         const intB = b.exits?.interstates?.name || 'zzz'
-        if (intA !== intB) return intA.localeCompare(intB)
+        if (intA !== intB) {
+          const numA = interstateNumber(intA)
+          const numB = interstateNumber(intB)
+          if (numA !== numB) return numA - numB
+          return intA.localeCompare(intB)
+        }
         const stA = a.exits?.state || a.state || 'ZZ'
         const stB = b.exits?.state || b.state || 'ZZ'
         if (stA !== stB) return stA.localeCompare(stB)
@@ -212,7 +232,13 @@ function AdminPageContent() {
       })
       setHotels(sorted)
     }
-    if (i) setInterstates(i); if (e) setExits(e)
+    // Re-sort client-side: the DB order('name') is a string sort (I-10 before
+    // I-4). Same numeric comparator as the hotels list uses.
+    if (i) setInterstates([...i].sort((x, y) => {
+      const d = interstateNumber(x.name || '') - interstateNumber(y.name || '')
+      return d !== 0 ? d : (x.name || '').localeCompare(y.name || '')
+    }))
+    if (e) setExits(e)
     if (ht) setHoteliers(ht)
     if (cl) {
       const now = new Date()

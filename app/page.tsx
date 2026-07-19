@@ -55,15 +55,35 @@ type Hotel = {
   distance: number | null
 }
 
+/** Sort interstate labels by their number, not as strings, so I-4 comes
+ *  before I-10. Labels with no digits (odd corridor names) sort to the end
+ *  and then alphabetically among themselves. */
+export function compareInterstateNames(a: string, b: string): number {
+  const num = (s: string) => {
+    const m = s.match(/\d+/)
+    return m ? parseInt(m[0], 10) : Number.MAX_SAFE_INTEGER
+  }
+  const d = num(a) - num(b)
+  return d !== 0 ? d : a.localeCompare(b)
+}
+
 /** Build a single-line address from the structured fields, falling back
  *  to the legacy 'address' column. Used for both card display and the
  *  directions URL. Skips empty parts gracefully so we don't end up with
- *  ugly leading commas or double-spaces. */
+ *  ugly leading commas or double-spaces.
+ *
+ *  City and state fall back to the linked exit. Some hotel rows have null
+ *  hotels.city/hotels.state and carry their location only on the exit they
+ *  hang off — without this fallback those listings render a bare street
+ *  address, and the directions URL becomes ambiguous enough that Maps can
+ *  route to the wrong state. exits.state is the authoritative field. */
 function composeAddress(h: Hotel): string {
+  const city  = h.city?.trim()  || h.exits?.city?.trim()  || ''
+  const state = h.state?.trim() || h.exits?.state?.trim() || ''
   const parts = [
     h.street_address?.trim(),
-    h.city?.trim(),
-    [h.state?.trim(), h.zip?.trim()].filter(Boolean).join(' ').trim(),
+    city,
+    [state, h.zip?.trim()].filter(Boolean).join(' ').trim(),
   ].filter(Boolean)
   if (parts.length > 0) return parts.join(', ')
   return h.address?.trim() || ''
@@ -671,6 +691,10 @@ export default function HomePage() {
           (data as { name: string | null }[])
             .map(r => r.name)
             .filter((n): n is string => !!n)
+            // Re-sort client-side. The DB order() is a string sort, which puts
+            // I-10 ahead of I-4 in the corridor pills. Drivers read these as
+            // road numbers, so sort by the number.
+            .sort(compareInterstateNames)
         )
       }
     })()
@@ -1017,7 +1041,7 @@ export default function HomePage() {
   // would otherwise hide (e.g. they picked I-5 then GPS resolved them in
   // Florida), keep that pill visible so they can still deselect it.
   if (selectedInterstate && !visibleInterstates.includes(selectedInterstate) && INTERSTATES.includes(selectedInterstate)) {
-    visibleInterstates = [...visibleInterstates, selectedInterstate].sort()
+    visibleInterstates = [...visibleInterstates, selectedInterstate].sort(compareInterstateNames)
   }
   const isInterstateListFiltered = visibleInterstates.length < INTERSTATES.length
 
