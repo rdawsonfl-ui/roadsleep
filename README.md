@@ -8,19 +8,35 @@ Live at: **[roadsleep.com](https://roadsleep.com)**
 
 ---
 
-## Status (current)
+## Status
+
+Live database counts as of 2026-07-19.
 
 | Metric | Count |
 |---|---|
 | Active interstate corridors | 13 |
-| Mapped exits | 606 |
-| Hotels | 1,335 |
-| RV parks | 312 |
-| **Total listings** | **1,647** |
-| Hoteliers onboarded | 2 |
-| Phone-call taps logged | 35 |
+| Mapped exits | 692 |
+| States covered | 39 |
+| Hotels | 1,616 |
+| RV parks | 364 |
+| **Total listings** | **1,980** |
+| Verified listings | 1,405 |
+| Hidden from drivers | 297 |
+| Hoteliers onboarded | 3 |
+| Phone-call taps logged | 76 |
 
-Geographic focus: east of the Mississippi (I-4, I-10, I-20, I-30, I-40, I-65, I-70, I-75, I-80, I-81, I-85, I-87, I-95). I-5 is wired in code but not yet seeded with data.
+Geographic focus: east of the Mississippi (I-4, I-10, I-20, I-30, I-40, I-65,
+I-70, I-75, I-80, I-81, I-85, I-87, I-95). I-5 is wired in code but not yet
+seeded with data.
+
+Inventory is not evenly distributed — I-95 and I-75 together carry roughly a
+third of all listings, while I-30 and I-87 are thin. That's a reflection of
+where the seeding effort went, not of where demand is.
+
+Note on "verified": verified means the listing has been confirmed against
+Google Places or by phone. Hidden listings are ones pulled from driver view —
+permanently closed, no working phone, or failed verification — and are retained
+rather than deleted so the decision is reversible.
 
 ---
 

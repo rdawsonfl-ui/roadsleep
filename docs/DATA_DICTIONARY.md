@@ -9,10 +9,10 @@ Every table, every column, what it means, and any non-obvious behavior. Pulled d
 | Table | Rows | Purpose |
 |---|---|---|
 | `interstates` | 13 | The 13 active interstate corridors |
-| `exits` | 606 | Exits along those corridors, with mile markers and lat/lng |
-| `hotels` | 1,647 | Listings (despite the name, includes RV parks) |
+| `exits` | 692 | Exits along those corridors, with mile markers and lat/lng |
+| `hotels` | 1,980 | Listings (despite the name, includes RV parks) |
 | `hoteliers` | 2 | Business owners with login accounts |
-| `call_logs` | 35 | One row per "Call" button tap |
+| `call_logs` | 76 | One row per "Call" button tap |
 | `settings` | varies | Operational toggles (key/value) |
 
 ---
@@ -75,7 +75,7 @@ The main listings table. Despite the name, RV parks live here too — distinguis
 | `description` | text | Free text |
 | `check_in_time`, `check_out_time` | text, defaults `'3:00 PM'` / `'11:00 AM'` | Display only |
 | `website` | text | Tappable link on detail page |
-| `verified` | bool, NOT NULL, default `false` | **Currently 0 of 1,647 are verified.** Drivers see all listings because `settings.show_unverified_to_drivers = 'true'`. |
+| `verified` | bool, NOT NULL, default `false` | **Currently 1,405 of 1,980 are verified.** Whether the unverified remainder reaches drivers depends on `settings.show_unverified_to_drivers`. |
 | `last_verified_at` | timestamptz | Set when admin marks a listing verified |
 | `verification_notes` | text | Free-text admin notes about verification |
 | `boost_price` | int | If non-null and `boost_ends_at > now()`, listing floats above default sort |

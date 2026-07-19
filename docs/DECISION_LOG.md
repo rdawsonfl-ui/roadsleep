@@ -86,7 +86,7 @@ Solution: two state variables. `userLoc` (live, used for in-memory math) and `st
 
 ### T-5. Two paged Supabase fetches instead of one
 
-**Why:** PostgREST has a server-side hard cap of 1000 rows. With 1,335 hotels, a single query silently truncates the tail — and Supabase orders by insertion order by default, so the most recently added corridors disappear first.
+**Why:** PostgREST has a server-side hard cap of 1000 rows. With ~1,980 listings, a single query silently truncates the tail — and Supabase orders by insertion order by default, so the most recently added corridors disappear first.
 
 Two `.range(0, 999)` and `.range(1000, 1999)` calls in `Promise.all`, merged in JS. Same speed as one fetch (parallel), no truncation. When inventory exceeds 2,000, add a third page or a smarter query.
 

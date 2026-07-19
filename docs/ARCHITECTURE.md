@@ -142,9 +142,9 @@ The **service role key** (server-only, never sent to browser) is used in admin o
 
 ---
 
-## 8. Why "1335 hotels" is two paged fetches
+## 8. Why the hotel fetch is paged
 
-Supabase PostgREST has a server-side hard cap of 1000 rows per response, even when the client asks for more. With ~1,335 hotels, a single `.limit(2000)` silently returns only 1,000 — and the truncated tail is whichever rows were inserted most recently (the newest corridors).
+Supabase PostgREST has a server-side hard cap of 1000 rows per response, even when the client asks for more. With ~1,980 listings, a single `.limit(2000)` silently returns only 1,000 — and the truncated tail is whichever rows were inserted most recently (the newest corridors).
 
 Both the homepage and admin work around this by issuing **two parallel `.range()` calls** of 1000 rows each and merging in JS. When inventory crosses ~2000 per category, we'll need a third page or a smarter query strategy (e.g. group by corridor server-side).
 

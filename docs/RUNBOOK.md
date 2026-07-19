@@ -89,7 +89,7 @@ There is no automated onboarding flow. Step 2 is manual.
    - `verification_notes = 'Phone confirmed YYYY-MM-DD; amenities updated.'`
 3. The listing now passes the verified filter (when `settings.show_unverified_to_drivers` is `'false'`).
 
-**Current state:** zero of 1,647 listings are verified. The site bypasses the filter via the settings toggle. If you want to enforce verification before launch, work through the verification queue first, then flip the setting.
+**Current state:** 1,405 of 1,980 listings are verified; 297 are hidden from drivers. The site bypasses the filter via the settings toggle. If you want to enforce verification before launch, work through the verification queue first, then flip the setting.
 
 ---
 
