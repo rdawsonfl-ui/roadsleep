@@ -998,6 +998,12 @@ export default function HomePage() {
   // directly, no floor — see comment above).
   const intersectionInterstateSet: Set<string> | null = (() => {
     if (!selectedInterstate || !userLoc) return null
+    // At "Anywhere" the driver isn't asking "what crosses my road soon" —
+    // they're scoping a long trip. Narrowing to the hand-built intersection
+    // table there is actively wrong: it hides corridors they could plainly
+    // reach, and the table is sparse enough (I-87 has a single entry) that
+    // the result looks broken. Bail out and let the full corridor list show.
+    if (targetDistance >= 1000) return null
     const intersections = INTERSTATE_INTERSECTIONS[selectedInterstate]
     if (!intersections) return null
     const axis = INTERSTATE_AXIS[selectedInterstate]
@@ -1031,7 +1037,7 @@ export default function HomePage() {
   //   3. otherwise -> nearby distance set (existing behavior — corridors
   //      with any listing within slider range)
   let visibleInterstates: string[]
-  if (showAllInterstates || !userLoc || (nearbyInterstateSet.size === 0 && !intersectionInterstateSet)) {
+  if (showAllInterstates || !userLoc || targetDistance >= 1000 || (nearbyInterstateSet.size === 0 && !intersectionInterstateSet)) {
     visibleInterstates = INTERSTATES
   } else if (intersectionInterstateSet) {
     visibleInterstates = INTERSTATES.filter(name => intersectionInterstateSet.has(name))
