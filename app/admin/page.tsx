@@ -663,7 +663,17 @@ function AdminPageContent() {
          *
          * Nothing was deleted. To bring it back, either add 'campaigns' to the
          * array below, or visit /admin?tab=campaigns which still renders it. */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '20px',
+          borderBottom: '1px solid var(--border)',
+          // Labels like "Interstates & Exits" wrapped mid-phrase on a phone,
+          // which is what made the tab row look garbled. Keep each label on
+          // one line and let the row scroll sideways instead.
+          overflowX: 'auto',
+          WebkitOverflowScrolling: 'touch',
+        }}>
           {(['hotels', 'hidden', 'interstates', 'hoteliers'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none',
@@ -671,6 +681,7 @@ function AdminPageContent() {
               borderBottom: tab === t ? '2px solid var(--amber)' : '2px solid transparent',
               padding: '10px 4px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
               fontFamily: 'DM Sans, sans-serif', marginBottom: '-1px',
+              whiteSpace: 'nowrap',
             }}>
               {t === 'hotels' ? '🏨 Listings'
                 : t === 'hidden' ? `🚫 Hidden (${hotels.filter(h => h.hidden === true).length})`

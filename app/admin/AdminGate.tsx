@@ -62,7 +62,25 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
   if (!mounted) return null
   if (ok) return (
     <>
-      <div style={{ position: 'fixed', top: '72px', right: '20px', zIndex: 40, display: 'flex', gap: '8px' }}>
+      {/* Admin action buttons.
+       *
+       * These were position:fixed at top-right, which floated them over the
+       * page. On a desktop there's empty margin to sit in; on a phone they
+       * landed directly on top of the sub-tab row and the two sets of labels
+       * overlapped into unreadable text.
+       *
+       * Now in normal flow above the content, right-aligned, and allowed to
+       * wrap. Width matches the admin container (820px) so they line up with
+       * the panel below instead of hugging the viewport edge. */}
+      <div style={{
+        maxWidth: '820px',
+        margin: '0 auto',
+        padding: '16px 20px 0',
+        display: 'flex',
+        flexWrap: 'wrap',
+        justifyContent: 'flex-end',
+        gap: '8px',
+      }}>
         <button onClick={() => setShowChange(true)} style={{
           background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--fog)',
           padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px',
