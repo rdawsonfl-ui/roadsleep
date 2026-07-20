@@ -34,7 +34,15 @@ function interstateNumber(label: string): number {
 }
 
 function AdminPageContent() {
-  const [tab, setTab] = useState<Tab>('hotels')
+  // Defaults to Listings. Reads ?tab= so the Campaigns panel — which no
+  // longer has a button in the tab bar — is still reachable at
+  // /admin?tab=campaigns without a code change.
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === 'undefined') return 'hotels'
+    const t = new URLSearchParams(window.location.search).get('tab')
+    const valid: Tab[] = ['hotels', 'hidden', 'interstates', 'hoteliers', 'campaigns']
+    return valid.includes(t as Tab) ? (t as Tab) : 'hotels'
+  })
   const [hotels, setHotels] = useState<any[]>([])
   const [interstates, setInterstates] = useState<Interstate[]>([])
   const [exits, setExits] = useState<any[]>([])
@@ -645,9 +653,18 @@ function AdminPageContent() {
           </div>
         )}
 
-        {/* Sub-tabs */}
+        {/* Sub-tabs
+         *
+         * Campaigns is deliberately NOT in this list. Attribution tracking is
+         * fully built and still recording — middleware, campaign_visits, the
+         * source stamp on call_logs, and the panel below all remain live — but
+         * there are no tagged campaigns running yet, so the tab was showing a
+         * single "(untagged)" row and taking up space on a phone screen.
+         *
+         * Nothing was deleted. To bring it back, either add 'campaigns' to the
+         * array below, or visit /admin?tab=campaigns which still renders it. */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
-          {(['hotels', 'hidden', 'interstates', 'hoteliers', 'campaigns'] as Tab[]).map(t => (
+          {(['hotels', 'hidden', 'interstates', 'hoteliers'] as Tab[]).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
               background: 'none', border: 'none',
               color: tab === t ? 'var(--amber)' : 'var(--fog)',
