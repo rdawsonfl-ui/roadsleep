@@ -1029,20 +1029,34 @@ export default function HomePage() {
     return s
   })()
 
-  // What we actually render in the pill row. Three layers, in priority order:
-  //   1. showAllInterstates ON, GPS off, or no nearby matches -> ALL corridors
-  //   2. selectedInterstate set + intersection map known -> intersection set
-  //      (the route-aware filter — selected corridor + corridors that cross
-  //       it within slider range ahead)
-  //   3. otherwise -> nearby distance set (existing behavior — corridors
-  //      with any listing within slider range)
+  // What we actually render in the pill row.
+  //
+  //   1. showAllInterstates ON, GPS off, or slider at Anywhere -> ALL corridors
+  //   2. otherwise -> the UNION of two sets:
+  //        a. corridors that cross the selected one within slider range ahead
+  //           (the intersection table — precise, but hand-written)
+  //        b. corridors with at least one listing within slider range
+  //           (distance-based, derived from live data)
+  //
+  // The union matters. The intersection table used to OVERRIDE the distance
+  // set, which meant the pill row could never show more than whatever had
+  // been typed into that table by hand. I-87 has a single entry (I-95), so a
+  // driver on I-87 saw exactly two pills whether the slider was at 25 miles
+  // or 750 — the slider had no effect at all, and reachable corridors like
+  // I-80 and I-81 were invisible. The table is a useful signal about which
+  // roads genuinely connect, but it is not a complete map, so it can add
+  // corridors and must not remove them.
   let visibleInterstates: string[]
-  if (showAllInterstates || !userLoc || targetDistance >= 1000 || (nearbyInterstateSet.size === 0 && !intersectionInterstateSet)) {
+  if (showAllInterstates || !userLoc || targetDistance >= 1000) {
     visibleInterstates = INTERSTATES
-  } else if (intersectionInterstateSet) {
-    visibleInterstates = INTERSTATES.filter(name => intersectionInterstateSet.has(name))
+  } else if (intersectionInterstateSet || nearbyInterstateSet.size > 0) {
+    visibleInterstates = INTERSTATES.filter(
+      name =>
+        intersectionInterstateSet?.has(name) ||
+        nearbyInterstateSet.has(name)
+    )
   } else {
-    visibleInterstates = INTERSTATES.filter(name => nearbyInterstateSet.has(name))
+    visibleInterstates = INTERSTATES
   }
   // Safety: if the driver has an interstate selected that the pill filter
   // would otherwise hide (e.g. they picked I-5 then GPS resolved them in
