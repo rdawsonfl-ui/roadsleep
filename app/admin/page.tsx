@@ -627,8 +627,8 @@ function AdminPageContent() {
               </div>
               <div style={{ fontSize: '11px', color: 'var(--fog)', lineHeight: 1.5 }}>
                 {testingMode
-                  ? 'Drivers see all 1,186 listings (verified + unverified). The green ✔ badge still only shows on verified.'
-                  : 'Drivers see only listings flipped to verified=true. Verified badge appears next to all of them.'}
+                  ? `Drivers see all ${hotels.filter(h => h.hidden !== true).length.toLocaleString()} visible listings (verified + unverified). The green ✔ badge still only shows on verified.`
+                  : `Drivers see only the ${hotels.filter(h => h.verified === true && h.hidden !== true).length.toLocaleString()} listings flipped to verified=true. Verified badge appears next to all of them.`}
               </div>
             </div>
             <button
