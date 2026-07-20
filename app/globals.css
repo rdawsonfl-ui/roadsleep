@@ -19,6 +19,8 @@
   --border: rgba(255,255,255,0.07);
   --border2: rgba(255,255,255,0.13);
   --navbg: rgba(13,15,20,0.95);
+  --chip: rgba(255,255,255,0.04);
+  --chipBorder: rgba(255,255,255,0.25);
 }
 
 /* ---------------------------------------------------------------------------
@@ -55,6 +57,8 @@
   --border:  rgba(15,23,42,0.10);
   --border2: rgba(15,23,42,0.16);
   --navbg: rgba(255,255,255,0.95);
+  --chip: #f2f4f8;
+  --chipBorder: rgba(15,23,42,0.28);
 }
 
 /* Cards read as flat gray-on-gray in light mode because the dark theme
@@ -83,6 +87,15 @@
 }
 [data-theme="light"] .dark-input::placeholder {
   color: var(--steel);
+}
+
+/* Slider track at --night4 is a light gray that all but disappears against
+ * a white page. Give it a defined track in light mode. */
+[data-theme="light"] .distance-slider::-webkit-slider-runnable-track {
+  background: #dfe3ea;
+}
+[data-theme="light"] .distance-slider::-moz-range-track {
+  background: #dfe3ea;
 }
 
 /* Slider thumb keeps its white ring in dark mode; on white that ring

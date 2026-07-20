@@ -1371,9 +1371,9 @@ export default function HomePage() {
                   }
                 }}
                 style={{
-                  background: active ? 'var(--orange)' : 'rgba(255,255,255,0.04)',
+                  background: active ? 'var(--orange)' : 'var(--chip)',
                   color:      active ? '#ffffff'      : 'var(--mist)',
-                  border:     '1px solid ' + (active ? 'var(--orange)' : 'rgba(255,255,255,0.25)'),
+                  border:     '1px solid ' + (active ? 'var(--orange)' : 'var(--chipBorder)'),
                   borderRadius: '999px',
                   padding: '7px 16px',
                   fontSize: '13px',
