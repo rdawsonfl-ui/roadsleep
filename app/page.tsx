@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/app/components/SiteFooter'
+import ThemeToggle from '@/app/components/ThemeToggle'
 import { getDrivingDistances } from '@/lib/mapbox'
 import { getSource } from '@/lib/analytics'
 
@@ -1257,11 +1258,19 @@ export default function HomePage() {
             <>Hotels at your <span style={{ color: 'var(--amber)' }}>next exit</span></>
           )}
         </h1>
-        <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '20px' }}>
-          {category === 'rv_park'
-            ? 'RV parks within driving distance of your interstate'
-            : 'Hotels along major interstates'}
-        </p>
+        {/* RV parks keep their subtitle — 'ahead on your route' is vague on its
+            own and the line does real work explaining that these sit off the
+            highway. The hotels subtitle ('Hotels along major interstates') was
+            pure restatement of the H1 and gave up its slot to the theme
+            toggle, which needs to be reachable without scrolling. */}
+        {category === 'rv_park' && (
+          <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '12px' }}>
+            RV parks within driving distance of your interstate
+          </p>
+        )}
+        <div style={{ marginTop: category === 'rv_park' ? 0 : '10px' }}>
+          <ThemeToggle />
+        </div>
 
         {locStatus === 'denied' && (
           <div style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: 'var(--mist)' }}>

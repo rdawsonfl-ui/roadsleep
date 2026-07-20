@@ -18,6 +18,118 @@
   --blue: #4fa3e0;
   --border: rgba(255,255,255,0.07);
   --border2: rgba(255,255,255,0.13);
+  --navbg: rgba(13,15,20,0.95);
+}
+
+/* ---------------------------------------------------------------------------
+ * LIGHT THEME (day mode)
+ *
+ * Dark is the original night-driving theme and is deliberately untouched —
+ * every rule below lives under [data-theme="light"], so nothing here can
+ * change how the app looks at night.
+ *
+ * The whole app styles from these variables (mostly via inline
+ * style={{ color: 'var(--x') }}), which is why a theme switch is a variable
+ * remap rather than a rewrite. The trick is that the *names* stay dark-themed
+ * — "night" is still the page background, "white" is still the text colour —
+ * they just point at inverted values. Renaming them would mean touching
+ * every call site for no visual gain.
+ *
+ * Palette matches ForSaleNFC / CarsNFC: orange on white.
+ * --------------------------------------------------------------------------- */
+[data-theme="light"] {
+  --night:  #ffffff;   /* page background */
+  --night2: #f7f8fa;   /* subtle raised surface */
+  --night3: #ffffff;   /* cards, inputs */
+  --night4: #eceef2;   /* slider track, inactive fills */
+  --steel:  #9aa1ae;   /* placeholder text */
+  --fog:    #6b7280;   /* secondary text */
+  --mist:   #4b5563;   /* body text */
+  --white:  #1f2430;   /* primary text — dark gray, not pure black */
+  --amber:  #ff6a00;   /* primary accent */
+  --amber2: #e05d00;   /* accent hover/pressed */
+  --orange: #ff6a00;
+  --green:  #16a34a;   /* darker than the dark-theme green, for AA on white */
+  --red:    #dc2626;
+  --blue:   #1b5fcc;
+  --border:  rgba(15,23,42,0.10);
+  --border2: rgba(15,23,42,0.16);
+  --navbg: rgba(255,255,255,0.95);
+}
+
+/* Cards read as flat gray-on-gray in light mode because the dark theme
+ * separates surfaces with brightness, not shadow. Give them a real edge. */
+[data-theme="light"] body {
+  background: var(--night2);
+}
+
+/* The amber-on-night button inverts to orange-on-white: the text has to
+ * flip to white, or it's orange text on an orange button. */
+[data-theme="light"] .btn-amber {
+  color: #ffffff;
+}
+
+/* hero-tag hard-codes amber rgba values tuned for a dark backdrop; at 15%
+ * opacity on white it disappears. Bump the tint and border. */
+[data-theme="light"] .hero-tag {
+  background: rgba(255, 106, 0, 0.10);
+  border-color: rgba(255, 106, 0, 0.35);
+  color: var(--amber2);
+}
+
+/* Input borders at 10% black are too faint to read as a field on white. */
+[data-theme="light"] .dark-input {
+  border-color: rgba(15,23,42,0.18);
+}
+[data-theme="light"] .dark-input::placeholder {
+  color: var(--steel);
+}
+
+/* Slider thumb keeps its white ring in dark mode; on white that ring
+ * vanishes and the thumb loses definition. Swap to a light-gray ring. */
+[data-theme="light"] .distance-slider::-webkit-slider-thumb {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15,23,42,0.15), 0 0 0 8px rgba(255,106,0,0.001);
+}
+[data-theme="light"] .distance-slider::-moz-range-thumb {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(15,23,42,0.15);
+}
+
+/* Theme toggle — segmented Day / Night control. Sits under the page heading
+ * where the subtitle used to be, so it's reachable with a thumb without
+ * scrolling, which matters when a driver pulls over at dusk and wants to
+ * flip the app dark. */
+.theme-toggle {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--night4);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  margin-bottom: 20px;
+}
+.theme-toggle button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--fog);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  min-height: 32px;
+}
+.theme-toggle button[aria-pressed="true"] {
+  background: var(--amber);
+  color: #ffffff;
+}
+[data-theme="light"] .theme-toggle button[aria-pressed="true"] {
+  color: #ffffff;
 }
 
 body {

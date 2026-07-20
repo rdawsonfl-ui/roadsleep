@@ -14,7 +14,7 @@ export default function Nav() {
   ]
   return (
     <nav style={{
-      background: 'rgba(13,15,20,0.95)',
+      background: 'var(--navbg)',
       backdropFilter: 'blur(12px)',
       borderBottom: '1px solid var(--border)',
       padding: '0 20px',

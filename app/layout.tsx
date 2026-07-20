@@ -49,7 +49,25 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/*
+          Applies the stored theme before first paint.
+
+          This has to be a blocking inline script in <head>, not a useEffect.
+          React effects run after the first paint, so a driver who picked Day
+          mode would get a full-screen flash of the dark theme on every single
+          page load — worse on slow connections, and unmissable on a phone.
+
+          Defaults to dark when nothing is stored, matching the server-rendered
+          data-theme="dark" above so hydration stays consistent.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('rs_theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark');}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body>
         <Nav />
         {children}
