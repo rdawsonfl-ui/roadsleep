@@ -947,8 +947,21 @@ export default function HomePage() {
   // for nearby search doesn't lose visibility into 'I-10 is nearby and
   // tappable' — both the list-distance filter and the pill filter are
   // honest distance filters, but they have different best defaults.
+  // The 200-mi floor applies ONLY when no corridor is selected. In that state
+  // the driver is orienting — "what roads am I near" — and a tight slider
+  // shouldn't blank the pill row.
+  //
+  // Once a corridor IS selected the driver is planning a specific trip, and
+  // the slider has to mean exactly what it says. With the floor still applied
+  // there, a slider at 75 mi produced a 200 mi pill radius and surfaced
+  // corridors like I-81 that are nowhere near 75 miles away — the number on
+  // screen and the pills underneath it disagreed.
   const NEARBY_INTERSTATE_RADIUS_MI =
-    targetDistance >= 1000 ? Number.POSITIVE_INFINITY : Math.max(targetDistance, 200)
+    targetDistance >= 1000
+      ? Number.POSITIVE_INFINITY
+      : selectedInterstate
+        ? targetDistance
+        : Math.max(targetDistance, 200)
   const nearbyInterstateSet: Set<string> = (() => {
     if (!userLoc) return new Set()
     const s = new Set<string>()
