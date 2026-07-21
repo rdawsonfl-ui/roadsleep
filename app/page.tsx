@@ -1281,18 +1281,18 @@ export default function HomePage() {
             Day/Night toggle, so the brand has to land here. Suffix adapts to
             the active category so the driver still sees what they're looking
             at. */}
-        {/* Rendered as SVG so the wordmark always fills the container width
-            exactly — one line, as large as the screen allows, no guessing at
-            font metrics. textLength + lengthAdjust force the exact fit, so it
-            can never wrap or clip on a narrow phone. Text is static ("Hotels"
-            regardless of category) by request. */}
-        <h1 style={{ margin: '0 0 12px' }} aria-label="RoadSleep — Hotels">
+        {/* Wordmark only, centered. Drawn as SVG with textLength so it fills
+            the line exactly — biggest it can be on one row at any screen
+            width. Rendered at 105% and pulled back by half that on the left
+            so it stays centered while sitting 5% larger; the overhang lives
+            in the page's 16px side padding and never clips. */}
+        <h1 style={{ margin: '0 0 12px', textAlign: 'center', overflow: 'hidden' }} aria-label="RoadSleep">
           <svg
             viewBox="0 0 1000 132"
-            width="100%"
+            width="105%"
             role="img"
             aria-hidden="true"
-            style={{ display: 'block' }}
+            style={{ display: 'block', marginLeft: '-2.5%' }}
           >
             <text
               x="0"
@@ -1304,7 +1304,7 @@ export default function HomePage() {
               fontSize="100"
               fill="var(--white)"
             >
-              Road<tspan fill="var(--amber)">Sleep</tspan> — Hotels
+              Road<tspan fill="var(--amber)">Sleep</tspan><tspan fontSize="36" dy="-38" fontWeight="600">™</tspan>
             </text>
           </svg>
         </h1>
