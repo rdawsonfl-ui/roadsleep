@@ -376,6 +376,10 @@ export default function HomePage() {
   // load, which is fine: the auto-pick is a first-load convenience, not
   // a continuous behavior.
   const [interstateUserTouched, setInterstateUserTouched] = useState<boolean>(false)
+  // Name of the corridor we last switched to on our own. Drives a short
+  // banner so the driver understands why the list just changed under them
+  // at 70mph — a silent repopulate reads as a bug. Cleared on tap.
+  const [autoSwitchedTo, setAutoSwitchedTo] = useState<string | null>(null)
   // Direction filter — only meaningful after an interstate is selected.
   // 'N'/'S' for north-south interstates, 'E'/'W' for east-west. We use
   // GPS lat (for NS) or lng (for EW) to figure out which exits are
@@ -623,7 +627,6 @@ export default function HomePage() {
   // interstateUserTouched still wins — if the driver manually tapped a
   // pill, never override.
   useEffect(() => {
-    if (interstateUserTouched) return
     if (!userLoc || hotels.length === 0) return
 
     // Find the closest exit per interstate
@@ -651,6 +654,24 @@ export default function HomePage() {
 
     if (!bestIname) return
 
+    // Manual lock. Tapping a pill used to disable auto-switch permanently,
+    // which meant a driver who picked I-87 by hand never got handed off to
+    // I-95 at the Bronx — the list just ran dry as they drove off the end
+    // of the corridor. The lock now RELEASES once the driver has plainly
+    // left the road they picked: their chosen corridor is 25+ mi behind
+    // them and some other corridor's exits are essentially underneath them
+    // (within 5 mi). Short of that, a manual pick still wins outright, so
+    // trip-planning from the couch and deliberate corridor browsing are
+    // unaffected.
+    if (interstateUserTouched) {
+      const heldDist = selectedInterstate
+        ? bestPerInterstate.get(selectedInterstate) ?? Number.POSITIVE_INFINITY
+        : Number.POSITIVE_INFINITY
+      const drivingOnOther = bestDist <= 5 && heldDist >= 25
+      if (!drivingOnOther) return
+      setInterstateUserTouched(false)
+    }
+
     // First-time auto-select (nothing currently chosen) — just pick.
     if (!selectedInterstate) {
       setSelectedInterstate(bestIname)
@@ -663,6 +684,7 @@ export default function HomePage() {
     if (bestIname === selectedInterstate) return
     const currentDist = bestPerInterstate.get(selectedInterstate) ?? Number.POSITIVE_INFINITY
     if (currentDist - bestDist >= 5) {
+      setAutoSwitchedTo(bestIname)
       setSelectedInterstate(bestIname)
       // Reset direction state too — bearing relative to a new road may
       // imply a different cardinal. The next GPS update will re-infer.
@@ -1383,6 +1405,24 @@ export default function HomePage() {
           Upcoming Routes — tap to switch
         </div>
 
+        {/* Auto-switch notice. Only appears when the app changed corridors on
+            its own; tapping any pill clears it. */}
+        {autoSwitchedTo && (
+          <div style={{
+            background: 'var(--amber)',
+            color: '#fff',
+            borderRadius: '10px',
+            padding: '8px 12px',
+            fontSize: '13px',
+            fontWeight: 600,
+            fontFamily: 'DM Sans, sans-serif',
+            textAlign: 'center',
+            marginBottom: '10px',
+          }}>
+            Now on {autoSwitchedTo} — showing stops on this route
+          </div>
+        )}
+
         {/* Interstate filter row. Single-select. Tapping the same one
             again deselects (and clears direction). All buttons same
             style — small outlined pills. Selected one fills with amber.
@@ -1406,6 +1446,7 @@ export default function HomePage() {
                 key={iname}
                 onClick={() => {
                   setInterstateUserTouched(true)
+                  setAutoSwitchedTo(null)
                   if (active) {
                     setSelectedInterstate(null)
                     setSelectedDirection(null)
