@@ -2032,6 +2032,91 @@ export default function HomePage() {
           )
         })}
 
+        {/* Corridor handoff. The list is scoped to one interstate, which is
+            right for "next exit" and wrong for planning a whole day — a driver
+            who slides out to 600 mi on I-87 hits the Bronx at 204 and the list
+            simply stops, with nothing telling them I-95 carries on south. That
+            requires knowing the road network, which a driver from out of state
+            doesn't.
+
+            Shows only when the corridor genuinely runs out short of what they
+            asked for: results exist, and the furthest one is comfortably inside
+            their slider setting. Uses the intersection table already loaded —
+            no routing call, no extra data. */}
+        {(() => {
+          if (loading || filtered.length === 0 || !userLoc) return null
+          if (targetDistance >= 1000 || !selectedInterstate) return null
+
+          const furthest = filtered.reduce((max, h) => {
+            const d = h.distance
+            return d != null && d > max ? d : max
+          }, 0)
+          // 50 mi of slack: if the last hotel is within spitting distance of
+          // the slider, the corridor hasn't run out — the filter is just doing
+          // its job.
+          if (furthest <= 0 || targetDistance - furthest < 50) return null
+
+          const links = INTERSTATE_INTERSECTIONS[selectedInterstate] || {}
+          const options = Object.entries(links)
+            .map(([name, pt]) => ({
+              name,
+              nearCity: pt.nearCity,
+              miles: milesBetween(userLoc.lat, userLoc.lng, pt.lat, pt.lng),
+            }))
+            // Only crossings the driver hasn't already passed, and only ones
+            // inside the range they asked about.
+            .filter(o => o.miles <= targetDistance && o.miles <= furthest + 60)
+            .sort((a, b) => a.miles - b.miles)
+
+          if (options.length === 0) return null
+
+          return (
+            <div style={{
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginTop: '8px',
+              background: 'var(--night2)',
+            }}>
+              <div style={{
+                fontSize: '14px', fontWeight: 700, color: 'var(--white)',
+                marginBottom: '4px',
+              }}>
+                {selectedInterstate} ends about {Math.round(furthest)} mi out
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
+                Still planning further? Continue on a connecting route:
+              </div>
+              {options.map(o => (
+                <button
+                  key={o.name}
+                  onClick={() => {
+                    setSelectedInterstate(o.name)
+                    setInterstateUserTouched(true)
+                    setAutoSwitchedTo(null)
+                    window.scrollTo({ top: 0, behavior: 'smooth' })
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    width: '100%', gap: '10px', marginBottom: '8px',
+                    background: 'transparent',
+                    border: '1px solid #FF6A00',
+                    color: '#FF6A00',
+                    borderRadius: '10px', padding: '12px 14px',
+                    fontSize: '15px', fontWeight: 600,
+                    fontFamily: 'inherit', cursor: 'pointer',
+                  }}
+                >
+                  <span>Switch to {o.name}</span>
+                  <span style={{ fontSize: '12px', opacity: 0.85 }}>
+                    joins near {o.nearCity} · {Math.round(o.miles)} mi
+                  </span>
+                </button>
+              ))}
+            </div>
+          )
+        })()}
+
         {!loading && filtered.length === 0 && (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--fog)', fontSize: '13px' }}>
             🛣️ No {category === 'rv_park' ? 'RV parks' : 'hotels'} found. Try expanding your distance filter or tap {category === 'rv_park' ? 'Hotels' : 'RV Parks'} above.
