@@ -39,8 +39,11 @@ and a locked-out asset.
 4. **Rotate the Supabase service role key.** The old key must be considered
    compromised the moment ownership changes. Rotate in the Supabase dashboard,
    then update the Vercel environment variable and redeploy.
-5. **Rotate the admin password.** Log into `/admin`, use the Change Password
-   control. It writes a new bcrypt hash via the `change_admin_password` RPC.
+5. **Take over admin access.** `/admin` signs in through Supabase Auth and
+   checks the `site_admins` table. Create the new owner's auth user, insert
+   their `user_id` into `site_admins`, verify they can load `/admin`, then
+   delete the seller's row. Do it in that order — deleting first locks
+   everyone out, and there is no UI to recover.
 6. **Change the public contact email.** Admin console → Change Contact Email.
    This drives what's shown in the site footer; leaving the seller's address
    there means customer email goes to the wrong person.
@@ -168,6 +171,11 @@ display and directions are correct. The underlying data is fixed by
 `migrations/003_backfill_hotel_city_state.sql` — run it, then this stops being
 a trap for ad-hoc SQL. Treat `exits.state` as authoritative regardless.
 
+**Voice / turn-by-turn was considered and rejected.** Once a driver taps Go,
+navigation is handed to Apple or Google Maps and this app is backgrounded, so
+it cannot announce anything. Maps also announces the exit and the correct side
+of the road, which this app cannot know. See D-16.
+
 **Arrival tracking rarely completes.** iOS Safari suspends background JavaScript
 within roughly 30 seconds, so the 90-minute GPS tracker almost never runs to
 completion. The arrival indicator was pulled from the hotelier dashboard rather
@@ -177,15 +185,26 @@ not a bug to fix in this codebase.
 
 **`google_check` had RLS disabled.** Fixed by
 `migrations/002_google_check_rls.sql` — run it. Until it's run, the anon key can
-write to that table.
+write to that table. Its read policy was additionally narrowed to admins in the
+July 2026 policy rewrite.
+
+**RLS was wide open until July 2026.** Every "Admin insert/update/delete"
+policy on `hotels`, plus read and update on `hoteliers`, was `USING(true)` with
+no role restriction — meaning the public anon key carried owner-level write
+access. Closed in the July 2026 rewrite; see `DECISION_LOG.md` D-14. If you are
+auditing history, assume any data change before that date could have originated
+from any visitor. No evidence of abuse was found, but the exposure was real.
 
 **Credentials hard-coded as fallbacks** in `lib/supabase.ts`. Still present
 deliberately: removing them breaks the build for anyone who hasn't set the
 environment variables. Once a new owner has all four variables configured in
 Vercel and verified a successful deploy, delete the fallbacks. See section 3.
 
-**Admin auth is a single shared password.** Fine for one operator; replace with
-Supabase Auth roles before adding staff. Not a defect — a scaling decision.
+**Admin access hangs on a single account.** Admin is now Supabase Auth plus
+the `site_admins` table (July 2026, replacing the old shared password). Any
+number of accounts can be admins, but only one is enrolled today. Losing that
+account's password means losing admin, so a second enrolled account is cheap
+insurance.
 
 **No booking flow.** The product hands the driver a phone number. Bookings
 happen off-platform, which is a deliberate decision — the target properties are

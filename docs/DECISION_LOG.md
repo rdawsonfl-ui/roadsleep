@@ -96,6 +96,8 @@ Two `.range(0, 999)` and `.range(1000, 1999)` calls in `Promise.all`, merged in 
 
 RLS policies are documented in `DATA_DICTIONARY.md`. If a future change loosens them, the entire trust model collapses.
 
+**Correction (July 2026):** RLS was enabled on every table, but the write policies were `USING(true)`, so the attack described above was in fact possible the whole time — enabling RLS is not the same as scoping it. Superseded by D-14.
+
 ### T-7. No staging environment
 
 **Why:** Solo operator. The cost of maintaining a separate staging Supabase + Vercel project is high, the benefit at current size is low. `git push main` deploys directly to production. Bad changes can be rolled back in Vercel UI in seconds.
@@ -117,6 +119,43 @@ The homepage handles both cases in the corridor join.
 ### T-10. Single-photo per listing (no gallery)
 
 **Why:** Most listings come from external sources (Google Places, OSM) where one decent photo is available; multi-photo curation is hours per listing. Until verification is done, the marginal value of a gallery is low. Once hoteliers self-onboard and upload their own photos, this becomes a sensible upgrade.
+
+### D-14. Admin is a Supabase Auth identity, not a shared password
+
+**Why:** `/admin` used to bcrypt-check a password in the browser and then query Postgres as `anon`. Postgres therefore had no way to distinguish the owner from a visitor, which forced every admin write policy to `USING(true)`. The names said "Admin insert hotels"; the expressions granted it to everyone holding the public anon key.
+
+Two options were considered:
+
+1. **Service-role key behind Next.js API routes.** Correct, but required rewriting all 27 admin query sites and introduced a server-held secret.
+2. **Make admin a real authenticated principal.** Sign in through Supabase Auth, check membership in a `site_admins` table via the `is_site_admin()` helper, then scope policies to it.
+
+Option 2 won because every existing admin query keeps working untouched — the client is simply authenticated now — and no new secret enters the system. The trade-off is that admin rights are granted by SQL insert rather than a UI, which is acceptable for an operation performed once or twice in the product's life.
+
+Consequence worth knowing: hoteliers and admin now share one auth system, so the `is_site_admin()` check on `/admin` is what separates them, not the login itself.
+
+### D-15. Lodging discovery rejects short-term rentals by review count
+
+**Why:** Google Places files every Airbnb and VRBO listing under type `lodging`. The first discovery run returned 350 results for I-87, of which 171 were private homes, spare rooms, and campsites. A driver at 11pm needs a front desk and a phone that answers, not a 3-night minimum on someone's guest room.
+
+Review count is the discriminator: short-term rentals carry their reviews on the booking platform, not on the Google Place, so they arrive unrated or with a handful. A real hotel that has sat at an interchange for years always has dozens. The gate is a Google rating plus 25+ reviews, with a name blocklist for the gas stations, mobile-home parks, and campgrounds Google also files as lodging.
+
+**Explicitly not filtered on star rating.** Low-rated highway motels stay in. A tired driver at 2am wants a bed, not a 4.5.
+
+### D-16. No in-app voice or turn-by-turn guidance
+
+**Why:** Considered spoken mile alerts ("10 miles to your exit"). Rejected on three counts:
+
+1. The app cannot know which side of the highway the ramp is on — hotel coordinates don't imply ramp geometry, and guessing wrong at 70mph is worse than silence.
+2. It cannot know which hotel the driver has chosen unless they say so, and most are still shopping.
+3. Once the driver taps Go, iOS backgrounds the page and suspends its JavaScript. Maps is already announcing the exit — correctly, including the side of the road.
+
+The only version with room to exist was a pre-decision heads-up ("Exit 45 ahead, 2 miles, four hotels"), which Maps cannot offer because it doesn't know the driver wants a bed. Shelved rather than built.
+
+### D-17. `route_position` replaces `mile_marker` for ordering
+
+**Why:** `exits.mile_marker` actually holds **exit numbers** on all 13 corridors — `exit_label` mirrors it exactly ("Exit 135" / 135.0). On most interstates exit number and milepost roughly coincide, so nothing broke. I-87 is the exception: it restarts numbering at Albany (Thruway 1–24, then Northway 1–44), so Harriman reads as 45 while Albany reads as 4 despite sitting 150 miles apart.
+
+Anything doing ahead/behind math on that column silently dropped valid stops from long-range results. `route_position` is continuous miles from each corridor's south/west terminus, derived from lat/lng, and is now what the direction filter and sort read. `mile_marker` is retained as a fallback and is still what the driver sees on the card — relabelled "Exit 45" rather than the incorrect "MM 45".
 
 ---
 

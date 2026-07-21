@@ -128,17 +128,40 @@ Admin and hotelier surfaces share the same hotels table. A hotelier can only see
 
 ## 7. Why Supabase RLS matters here
 
-Almost every page reads from Supabase directly using the **anon key** (publicly visible in the browser bundle). That's safe **only because** RLS is on:
+Almost every page reads from Supabase directly using the **anon key** (publicly visible in the browser bundle). That's safe **only because** RLS is on and correctly scoped.
 
-- `interstates`, `exits`, `hotels` — `select` is open to anyone (driver-facing)
-- `hotels` — `update` only allowed when `hotelier_id = auth.uid()` (claimed listings)
-- `hoteliers` — only the row matching `auth_user_id` is selectable
-- `call_logs` — `insert` open (driver tap), `select` only for matching `hotelier_id`
-- `settings` — admin only
+Current policy set (rewritten July 2026 — see D-14 in `DECISION_LOG.md`):
+
+| Table | anon (driver) | authenticated hotelier | site admin |
+|---|---|---|---|
+| `interstates`, `exits` | select | select | full |
+| `hotels` | select | select; insert/update own (`hotelier_id = current_hotelier_id()`) | full |
+| `hoteliers` | none | own row only (`auth_user_id = auth.uid()`) | full |
+| `call_logs` | insert only | select for own hotels | full |
+| `campaign_visits` | insert only | none | select |
+| `google_check` | none | none | select |
+| `settings` | select of two whitelisted keys | same | via RPC |
+
+Admin is identified by the `site_admins` table and the `is_site_admin()` SECURITY DEFINER helper, which checks `auth.uid()`. Admin is no longer a client-side password — see section 7a.
 
 If you ever loosen these policies, the entire trust model collapses. Don't.
 
-The **service role key** (server-only, never sent to browser) is used in admin operations and seeding — it bypasses RLS. Never expose it.
+The **service role key** (server-only, never sent to browser) bypasses RLS entirely. Never expose it.
+
+### 7a. Admin authentication
+
+`/admin` authenticates through Supabase Auth, then calls `is_site_admin()`. A hotelier who signs in and navigates to `/admin` is signed back out.
+
+Granting admin to another account is one insert:
+
+```sql
+insert into public.site_admins (user_id, email)
+select id, email from auth.users where email = 'someone@example.com';
+```
+
+Revoking is the matching delete. There is no UI for this deliberately — it's a rare, high-consequence operation.
+
+**Historical note:** until July 2026 `/admin` used a bcrypt password checked in the browser, and the client then talked to Postgres as `anon`. That forced every admin write policy to be `USING(true)`, which meant anyone holding the public anon key had owner-level write access to `hotels`, `hoteliers`, and read access to all `call_logs`. The policy names said "Admin insert hotels"; the expressions did not. If you are reading a copy of this document dated before July 2026, it described the intended model rather than the deployed one.
 
 ---
 

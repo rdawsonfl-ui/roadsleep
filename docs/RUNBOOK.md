@@ -21,6 +21,90 @@ If you're a developer looking for "how is this built," go to `ARCHITECTURE.md` i
 
 ---
 
+## Discovering hotels for exits that have none
+
+**Costs money.** Roughly $0.032 per Nearby Search call and $0.003 per Place
+Details call, billed to the Google Places account. A 75-exit run cost about
+$4.20 all in. Always price the batch before running it.
+
+Find the gaps first:
+
+```sql
+select i.name, count(*) filter (where h.id is null) as exits_with_no_hotels
+from exits e
+join interstates i on i.id = e.interstate_id
+left join lateral (
+  select 1 as id from hotels h2
+  where h2.exit_id = e.id and coalesce(h2.type,'hotel') = 'hotel' limit 1
+) h on true
+where e.lat is not null
+group by i.name order by 2 desc;
+```
+
+Then queue, fire, collect. **Fire and collect are separate calls on purpose** —
+`pg_net` is asynchronous, so collecting immediately after firing returns zero.
+Wait 20–30 seconds.
+
+```sql
+select enqueue_lodging_discovery('I-75', 40);  -- corridor, max exits
+select fire_lodging_discovery(40);             -- sends the HTTP requests
+-- wait ~30s
+select collect_lodging_discovery();            -- parses results into hotels
+```
+
+Everything inserts with `hidden = true` and `enrichment_status = 'discovered'`.
+Nothing reaches drivers until you publish it. The collector already rejects
+short-term rentals, gas stations, mobile-home parks, and anything more than 15
+miles from the exit — see `DECISION_LOG.md` D-15.
+
+New rows have no phone number, because Nearby Search doesn't return one and a
+listing without a phone is useless here. Fetch phones via Place Details:
+
+```sql
+insert into phone_refresh_queue(hotel_id, place_id, old_phone)
+select h.id, h.google_place_id, h.phone
+from hotels h
+left join phone_refresh_queue q on q.hotel_id = h.id
+where h.enrichment_status = 'discovered'
+  and h.google_place_id is not null and h.phone is null and q.hotel_id is null;
+
+select fire_phone_refresh(600);
+-- wait ~40s
+select collect_phone_refresh();
+
+update hotels h set phone = q.google_phone
+from phone_refresh_queue q
+where q.hotel_id = h.id and q.google_phone is not null
+  and h.phone is null and h.enrichment_status = 'discovered';
+```
+
+Review what landed, then publish:
+
+```sql
+update hotels
+set hidden = false, enrichment_status = 'published'
+where enrichment_status = 'discovered' and phone is not null;
+```
+
+---
+
+## Granting or revoking admin access
+
+```sql
+-- grant
+insert into public.site_admins (user_id, email)
+select id, email from auth.users where email = 'someone@example.com';
+
+-- revoke
+delete from public.site_admins where email = 'someone@example.com';
+```
+
+The account must already exist in Supabase Auth. Verify the new admin can load
+`/admin` **before** revoking anyone — there is no recovery UI, and removing the
+last row locks everybody out of the admin console permanently.
+
+---
+
 ## Adding a new interstate corridor
 
 This has been done several times. Roughly 30 minutes of admin work + 2-4 hours of data sourcing.
@@ -191,6 +275,9 @@ The interstate is missing from `INTERSTATE_AXIS` in `app/page.tsx`. Add an `'NS'
 ## Things never to do
 
 - **Don't disable RLS** on any table. The app trusts RLS for write protection.
+- **Don't write a policy as `USING(true)`** on any table that isn't meant to be world-writable. Enabling RLS is not the same as scoping it — this exact mistake left `hotels` and `hoteliers` open to the public anon key until July 2026.
+- **Don't delete the last row of `site_admins`.** It is the only thing granting admin, and nothing in the UI can restore it.
+- **Don't run a paid Places batch without pricing it first.** Nearby Search and Place Details are billed per call.
 - **Don't expose `SUPABASE_SERVICE_ROLE_KEY`** in any `NEXT_PUBLIC_*` env var, client-side import, or commit. It bypasses RLS entirely.
 - **Don't `DELETE FROM interstates`** without a `WHERE`. The `on delete cascade` will wipe every exit and hotel.
 - **Don't bulk-insert without `ON CONFLICT` handling** if there's any chance of re-running the same script. Especially for `interstates.name` (unique).

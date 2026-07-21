@@ -1,7 +1,40 @@
 # RoadSleep — To-Do List
 
 Single source of truth for open work on RoadSleep. Updated as items ship.
-Last touched: 2026-05-28
+Last touched: 2026-07-21
+
+## ✅ Shipped 2026-07-21
+
+- **Security: RLS rewrite.** `hotels` and `hoteliers` write policies were
+  `USING(true)` — the public anon key had owner-level write access, and
+  `hoteliers` / `call_logs` / `campaign_visits` were world-readable. Closed and
+  verified as the `anon` role. `/admin` now signs in via Supabase Auth and
+  checks the new `site_admins` table (`is_site_admin()`).
+- **`route_position`** column on `exits` — continuous miles from each
+  corridor's terminus. Direction filtering and sort now use it; `mile_marker`
+  holds exit numbers and is non-monotonic on I-87.
+- **Lodging discovery pipeline** — `enqueue/fire/collect_lodging_discovery`,
+  with a permanent gate rejecting short-term rentals. 610 hotels published,
+  every zero-coverage exit filled. Network at ~2,007 live hotels.
+- **Corridor auto-switch** now releases a manual pill selection once the driver
+  has clearly left that road.
+- UI: Day/Night toggle moved to nav, wordmark into the page H1, "Find a Stop"
+  removed, ← Home added off-homepage, cards show "Exit 45" not "MM 45".
+
+## 🔜 Open, small
+
+- **Second admin account.** `site_admins` has one row. Losing that password
+  means losing admin permanently. Enroll a backup address.
+- **Poughkeepsie mis-assignment.** Two hotels are attached to I-87 exits but
+  Poughkeepsie isn't on I-87. Reassign or drop.
+- **~297 previously-hidden listings** never reviewed. Separate from the
+  discovery batch.
+- **`route_position` backfill for new exits.** The backfill was a one-off
+  query; new exits land with a null. Either re-run it after seeding a corridor
+  or make it a trigger.
+- **Discovery for remaining corridors** is done for every exit that had zero
+  hotels. Exits that already had one or two were never re-checked, so thin
+  coverage is still thin.
 
 ## 🎯 Arrival proof v2 — SMS confirmation (next session w/ Twilio)
 The "📍 arrived" pill was removed from the hotelier dashboard 2026-05-29

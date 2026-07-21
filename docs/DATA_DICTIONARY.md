@@ -10,10 +10,15 @@ Every table, every column, what it means, and any non-obvious behavior. Pulled d
 |---|---|---|
 | `interstates` | 13 | The 13 active interstate corridors |
 | `exits` | 692 | Exits along those corridors, with mile markers and lat/lng |
-| `hotels` | 1,980 | Listings (despite the name, includes RV parks) |
+| `hotels` | 2,597 | Listings (despite the name, includes RV parks) |
 | `hoteliers` | 2 | Business owners with login accounts |
-| `call_logs` | 76 | One row per "Call" button tap |
+| `call_logs` | 77 | One row per "Call" button tap |
 | `settings` | varies | Operational toggles (key/value) |
+| `site_admins` | 1 | Auth users granted admin. Gates `/admin`. |
+| `exit_discovery_queue` | varies | Work queue for the lodging discovery pipeline |
+| `google_check`, `google_check_queue` | varies | Listing verification against Google Places |
+| `phone_refresh_queue` | varies | Phone-number refresh via Place Details |
+| `campaign_visits` | varies | Marketing source attribution on landing |
 
 ---
 
@@ -42,12 +47,15 @@ Each exit on a corridor. The atomic unit hotels hang off.
 | `interstate_id` | uuid | FK → `interstates.id`, `on delete cascade` |
 | `direction` | text, NOT NULL | `'N'`, `'S'`, `'E'`, or `'W'`. **Note:** check constraint enforces this. |
 | `exit_label` | text | Human label, e.g. `"Exit 42"` |
-| `mile_marker` | numeric(6,1), NOT NULL | The MM number. Used for sort order along a corridor. |
+| `mile_marker` | numeric(6,1), NOT NULL | **Misnamed.** Holds the EXIT NUMBER, not the milepost — `exit_label` mirrors it exactly. Displayed to drivers as "Exit 45". Do not sort on this; see `route_position`. |
+| `route_position` | numeric | Continuous miles from the corridor's south/west terminus, derived from lat/lng. **This is the ordering axis** for ahead/behind and sort. Added July 2026 because `mile_marker` is non-monotonic on I-87, which restarts numbering at Albany. |
 | `city` | text | City of the exit |
 | `state` | text | 2-letter state code |
 | `lat` | numeric | **Critical.** Used for distance calculations. Many older rows are null. |
 | `lng` | numeric | Same as lat. |
 | `created_at` | timestamptz | Auto |
+
+**Gotcha:** `mile_marker` and `route_position` are not interchangeable. On most corridors they roughly track each other; on I-87 they diverge completely (Harriman is `mile_marker` 45 but `route_position` 51, while Albany is `mile_marker` 4 and `route_position` 157). Any new query doing distance or direction logic must use `route_position`.
 
 **Gotcha:** the `direction` column is non-null on the schema, but it's effectively redundant with `interstate_id` for our usage — the homepage doesn't query it. Direction filtering is done via lat/lng comparison to the driver's GPS, not via this column.
 
@@ -195,13 +203,22 @@ Add new indexes as needed; performance is fine at current scale.
 
 ## RLS policies (summary)
 
+Rewritten July 2026. The table below is the deployed state, verified by querying as the `anon` role.
+
 | Table | Read | Write |
 |---|---|---|
-| `interstates` | Public | Service role only |
-| `exits` | Public | Service role only |
-| `hotels` | Public | Service role + matching `hotelier_id` |
-| `hoteliers` | Self only | Self only |
-| `call_logs` | Matching `hotelier_id` only | Public insert |
-| `settings` | Public read of allow-listed keys | Service role only |
+| `interstates` | Public | `is_site_admin()` |
+| `exits` | Public | `is_site_admin()` |
+| `hotels` | Public | `is_site_admin()` or matching `hotelier_id` |
+| `hoteliers` | Own row (`auth_user_id = auth.uid()`) or admin | Same |
+| `call_logs` | Own hotels or admin | Public insert |
+| `campaign_visits` | Admin only | Public insert |
+| `google_check` | Admin only | — |
+| `settings` | Public read of two allow-listed keys | Via RPC |
+| `site_admins` | No policies — reachable only through `is_site_admin()` | — |
 
-If a buyer asks "is the data exposed?" — the answer is yes, by design. Anything in `interstates`, `exits`, `hotels` is meant to be readable by any anonymous browser. The trust model relies on RLS preventing **writes**, not reads.
+Admin is `auth.uid()` present in `site_admins`, checked by the `is_site_admin()` SECURITY DEFINER helper.
+
+If a buyer asks "is the data exposed?" — anything in `interstates`, `exits`, `hotels` is meant to be readable by any anonymous browser. Hotelier records, call logs, and campaign data are not, and are no longer.
+
+**Prior state, disclosed:** before July 2026 the write policies on `hotels` and `hoteliers` were `USING(true)` with no role restriction, and `hoteliers`, `call_logs`, and `campaign_visits` were world-readable. Anyone with the public anon key could have read every hotelier account or rewritten any listing's phone number. See `DECISION_LOG.md` D-14.
