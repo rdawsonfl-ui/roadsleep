@@ -111,18 +111,20 @@ export default function HotelierPortal() {
       .eq('auth_user_id', authUser.id)
       .maybeSingle()
     if (row) return row
-    // Fall back to email match (legacy users — link them now)
-    const { data: byEmail } = await supabase
-      .from('hoteliers')
-      .select('id, email, name, business_phone, auth_user_id')
-      .eq('email', email)
-      .maybeSingle()
-    if (byEmail) {
-      // Self-heal: stamp the auth link so future logins skip this branch
-      if (!byEmail.auth_user_id) {
-        await supabase.from('hoteliers').update({ auth_user_id: authUser.id }).eq('id', byEmail.id)
-      }
-      return byEmail
+    // Fall back to email match (legacy users — link them now).
+    // This has to go through an RPC: hoteliers SELECT is scoped to
+    // auth_user_id = auth.uid(), so a legacy row whose auth link isn't stamped
+    // yet is invisible to a plain query. The RPC is SECURITY DEFINER but reads
+    // the email from the caller's own JWT, so it can only ever link the record
+    // matching the address they actually authenticated with.
+    const { data: linkedId } = await supabase.rpc('link_my_hotelier_record')
+    if (linkedId) {
+      const { data: linked } = await supabase
+        .from('hoteliers')
+        .select('id, email, name, business_phone, auth_user_id')
+        .eq('id', linkedId)
+        .maybeSingle()
+      if (linked) return linked
     }
     return null
   }
@@ -275,17 +277,14 @@ export default function HotelierPortal() {
     // Create the hoteliers profile row linked to the new auth user.
     // If a row with this email already existed (legacy signup), keep it and
     // just stamp auth_user_id so the user joins their old data automatically.
-    const { data: existing } = await supabase
-      .from('hoteliers')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle()
-    if (existing) {
+    // Same RLS constraint as login: a legacy row isn't visible until it's
+    // linked, so ask the RPC to claim it first.
+    const { data: existingId } = await supabase.rpc('link_my_hotelier_record')
+    if (existingId) {
       await supabase.from('hoteliers').update({
-        auth_user_id: data.user.id,
         name: authForm.name.trim(),
         business_phone: authForm.business_phone.trim(),
-      }).eq('id', existing.id)
+      }).eq('id', existingId)
     } else {
       await supabase.from('hoteliers').insert({
         auth_user_id: data.user.id,
