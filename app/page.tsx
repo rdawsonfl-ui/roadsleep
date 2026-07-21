@@ -529,6 +529,76 @@ export default function HomePage() {
   // come back — drivers see haversine first, then real numbers replace.
   const [drivingMiles, setDrivingMiles] = useState<Map<string, number>>(new Map())
 
+  // ---- Voice mile alerts -------------------------------------------------
+  // A driver picks one hotel to head for, then gets spoken warnings at 10, 5,
+  // 2 and 1 miles out so they can move over in time instead of reading the
+  // phone at 70mph. Uses the browser's built-in speechSynthesis — no API, no
+  // cost, no network. Distance is plain haversine off the GPS watch we're
+  // already running, so this adds zero Mapbox calls.
+  const [targetHotel, setTargetHotel] = useState<Hotel | null>(null)
+  // Thresholds already announced for the current target, so each fires once.
+  // Reset whenever the target changes.
+  const spokenRef = useRef<Set<number>>(new Set())
+  const [voiceReady, setVoiceReady] = useState(false)
+
+  // 10 mi = start thinking about it, 2 mi = get over, 1 mi = it's here.
+  // US interstate exits are right-hand side except for a handful of left
+  // exits, so "on the right" is safe as a general cue.
+  const ALERT_MILES = [10, 2]
+
+  const speak = (text: string) => {
+    try {
+      const synth = window.speechSynthesis
+      if (!synth) return
+      const u = new SpeechSynthesisUtterance(text)
+      u.rate = 0.95
+      u.volume = 1
+      synth.speak(u)
+    } catch { /* speech unavailable — alerts degrade to the on-screen banner */ }
+  }
+
+  // Watches distance to the chosen target and speaks each threshold once.
+  useEffect(() => {
+    if (!targetHotel || !userLoc) return
+    const lat = targetHotel.latitude ?? targetHotel.exits?.lat
+    const lng = targetHotel.longitude ?? targetHotel.exits?.lng
+    if (lat == null || lng == null) return
+
+    const miles = milesBetween(userLoc.lat, userLoc.lng, Number(lat), Number(lng))
+
+    // Each threshold fires once, on the first fix taken inside it.
+    for (const mark of ALERT_MILES) {
+      if (miles <= mark && !spokenRef.current.has(mark)) {
+        spokenRef.current.add(mark)
+        speak(`${mark} miles to ${targetHotel.name}.`)
+      }
+    }
+
+    if (miles <= 1 && !spokenRef.current.has(1)) {
+      spokenRef.current.add(1)
+      speak(`Your exit is coming up on the right. ${targetHotel.name}.`)
+    }
+
+    if (miles <= 0.3 && !spokenRef.current.has(0)) {
+      spokenRef.current.add(0)
+      speak(`Arriving at ${targetHotel.name}.`)
+    }
+  }, [userLoc, targetHotel])
+
+  // iOS will not speak unless synthesis was first triggered inside a real tap.
+  // Selecting a target IS that tap, so we prime the engine with a silent
+  // utterance there and everything after can fire from the GPS watch.
+  const startGuidance = (h: Hotel) => {
+    spokenRef.current = new Set()
+    setTargetHotel(h)
+    try {
+      const u = new SpeechSynthesisUtterance('Guiding you to ' + h.name)
+      u.rate = 0.95
+      window.speechSynthesis.speak(u)
+      setVoiceReady(true)
+    } catch { setVoiceReady(false) }
+  }
+
   // Position along the corridor, used for all ahead/behind math. Prefers
   // route_position (continuous miles from the route's south/west end,
   // derived from lat/lng) and falls back to mile_marker where the backfill
@@ -1318,32 +1388,30 @@ export default function HomePage() {
             Day/Night toggle, so the brand has to land here. Suffix adapts to
             the active category so the driver still sees what they're looking
             at. */}
-        {/* Wordmark only, centered. Drawn as SVG with textLength so it fills
-            the line exactly — biggest it can be on one row at any screen
-            width. Rendered at 105% and pulled back by half that on the left
-            so it stays centered while sitting 5% larger; the overhang lives
-            in the page's 16px side padding and never clips. */}
-        <h1 style={{ margin: '0 0 12px', textAlign: 'center', overflow: 'hidden' }} aria-label="RoadSleep">
-          <svg
-            viewBox="0 0 1000 132"
-            width="100%"
-            role="img"
-            aria-hidden="true"
-            style={{ display: 'block' }}
-          >
-            <text
-              x="0"
-              y="100"
-              textLength="1000"
-              lengthAdjust="spacingAndGlyphs"
-              fontFamily="Syne, sans-serif"
-              fontWeight="800"
-              fontSize="100"
-              fill="var(--white)"
-            >
-              Road<tspan fill="var(--amber)">Sleep</tspan><tspan fontSize="36" dy="-38" fontWeight="600">™</tspan>
-            </text>
-          </svg>
+        {/* Real text, not SVG. The SVG version used lengthAdjust to fill the
+            width exactly, which widened every glyph past how Syne was drawn —
+            that's what read as too wide and blurry. Native text keeps the
+            letterforms correct and picks up font hinting, so it's sharp at any
+            size. Sized in vw so it still scales with the screen and stays on
+            one line, capped so it doesn't balloon on desktop. */}
+        <h1 style={{
+          margin: '0 0 12px',
+          textAlign: 'center',
+          fontFamily: 'Syne, sans-serif',
+          fontWeight: 800,
+          fontSize: 'clamp(32px, 14vw, 64px)',
+          lineHeight: 1.05,
+          letterSpacing: '-0.02em',
+          whiteSpace: 'nowrap',
+          color: 'var(--white)',
+        }}>
+          Road<span style={{ color: 'var(--amber)' }}>Sleep</span>
+          <sup style={{
+            fontSize: '0.3em',
+            fontWeight: 600,
+            verticalAlign: 'super',
+            marginLeft: '2px',
+          }}>™</sup>
         </h1>
         {/* RV parks keep their subtitle — it does real work explaining that
             these sit off the highway. Hotels don't need one; they sit at the
