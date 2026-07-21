@@ -1281,7 +1281,7 @@ export default function HomePage() {
             Day/Night toggle, so the brand has to land here. Suffix adapts to
             the active category so the driver still sees what they're looking
             at. */}
-        <h1 style={{ fontSize: '26px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '4px' }}>
+        <h1 style={{ fontSize: '52px', lineHeight: 1.05, fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '10px' }}>
           Road<span style={{ color: 'var(--amber)' }}>Sleep</span>
           <sup style={{ fontSize: '0.4em', marginLeft: '1px', fontWeight: 600, verticalAlign: 'super' }}>™</sup>
           {' — '}
