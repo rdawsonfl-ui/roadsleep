@@ -80,13 +80,26 @@ export function compareInterstateNames(a: string, b: string): number {
 function composeAddress(h: Hotel): string {
   const city  = h.city?.trim()  || h.exits?.city?.trim()  || ''
   const state = h.state?.trim() || h.exits?.state?.trim() || ''
+
+  // Google-discovered listings carry their street in `address` (from the
+  // Places `vicinity` field, e.g. "160 Corporate Boulevard, Yonkers") and
+  // leave `street_address` null. Reading only street_address made those rows
+  // fall through to city + state, which is exactly what the exit line above
+  // already prints — so the card showed "Yonkers (Major Deegan), NY" twice
+  // and the actual street address never appeared.
+  const street = h.street_address?.trim() || h.address?.trim() || ''
+
+  // `address` often already ends in the city, so don't append it twice.
+  const cityIsRedundant =
+    !!city && street.toLowerCase().includes(city.toLowerCase())
+
   const parts = [
-    h.street_address?.trim(),
-    city,
+    street,
+    cityIsRedundant ? '' : city,
     [state, h.zip?.trim()].filter(Boolean).join(' ').trim(),
   ].filter(Boolean)
-  if (parts.length > 0) return parts.join(', ')
-  return h.address?.trim() || ''
+
+  return parts.join(', ')
 }
 
 // Build a Google Maps URL that LAUNCHES TURN-BY-TURN NAVIGATION immediately
