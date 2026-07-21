@@ -1424,9 +1424,13 @@ export default function HomePage() {
             because they sit OFF the highway, often 5-20 mi out, so promising
             them "at upcoming exits" would be false. */}
         <p style={{
-          color: 'var(--fog)',
-          fontSize: '15px',
-          fontWeight: 500,
+          // Theme token, not a literal #111: near-black in Day mode as asked,
+          // but it flips to the light text colour at night. Hard black would
+          // vanish against the dark background, which is the mode a driver is
+          // actually in when they need this.
+          color: 'var(--white)',
+          fontSize: '17px',
+          fontWeight: 600,
           textAlign: 'center',
           margin: '0 0 16px',
         }}>
