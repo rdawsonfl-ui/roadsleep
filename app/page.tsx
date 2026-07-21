@@ -51,7 +51,7 @@ type Hotel = {
   // so drivers can decide if the detour is worth it.
   distance_off_route_mi?: number | null
   near_interstate?: { name: string | null } | null
-  exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; route_position: number | null; interstates?: { name: string | null } | null } | null
+  exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; exit_label: string | null; mile_marker: number | null; route_position: number | null; interstates?: { name: string | null } | null } | null
   distance: number | null
 }
 
@@ -770,7 +770,7 @@ export default function HomePage() {
       // returns its full slice. Two pages cover up to 2000 rows; we'll
       // need to paginate further (or move to a smarter query) when the
       // platform crosses ~2000 hotels per category.
-      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,distance_from_exit_mi,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,route_position,interstates(name))'
+      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,distance_from_exit_mi,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,exit_label,mile_marker,route_position,interstates(name))'
       const buildQuery = (start: number, end: number) => {
         let q = supabase
           .from('hotels')
@@ -1656,7 +1656,7 @@ export default function HomePage() {
         {filtered.map((h) => {
           const distLabel = h.distance !== null ? `${Math.round(h.distance as number)} mi away` : null
           // Display label for location.
-          // - Hotels (or RV parks attached to an exit): "I-95 · MM 318 · City, ST"
+          // - Hotels (or RV parks attached to an exit): "I-95 · Exit 318 · City, ST"
           // - RV parks with distance-off-route data: "I-95 · 4 mi off route"
           //   so drivers can decide if the detour is worth it.
           const exitLabel = (() => {
@@ -1666,7 +1666,14 @@ export default function HomePage() {
             }
             if (!h.exits) return null
             // Base: "I-75 · MM 131 · Fort Myers, FL"
-            const base = `${h.exits.interstates?.name || ''} · MM ${h.exits.mile_marker} · ${h.exits.city}, ${h.exits.state}`
+            // Show the exit number, which is what's on the sign the driver is
+            // looking for. This used to read "MM 45" — but mile_marker holds
+            // EXIT numbers on every corridor in the DB (exit_label mirrors it
+            // exactly: "Exit 135" / 135.0). On most interstates exit number and
+            // milepost coincide so nobody noticed; on the NY Thruway they don't,
+            // and "MM 45" for Harriman was simply wrong.
+            const exitTag = h.exits.exit_label || (h.exits.mile_marker != null ? `Exit ${h.exits.mile_marker}` : null)
+            const base = [h.exits.interstates?.name || '', exitTag, `${h.exits.city}, ${h.exits.state}`].filter(Boolean).join(' · ')
             // Append off-exit distance when we computed it (helps a driver
             // decide whether to detour — 0.4 mi vs 8 mi is genuinely
             // different even at the same exit). Round to one decimal
