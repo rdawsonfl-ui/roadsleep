@@ -30,8 +30,26 @@ export default function Nav() {
           reachable from every page without scrolling, and it took the
           slot the wordmark used to hold. The wordmark moved into the
           page H1. 'Find a Stop' still links home. */}
-      <div className="nav-theme-toggle">
-        <ThemeToggle />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Home link. The wordmark used to be the way back to the driver
+            view; it moved into the page H1, and 'Find a Stop' came out of
+            the tab row, which left /hotelier with no way home but the
+            browser back button. Shown only when you're not already home. */}
+        {path !== '/' && (
+          <Link href="/" style={{
+            color: 'var(--amber)',
+            fontSize: '13px',
+            fontWeight: 600,
+            textDecoration: 'none',
+            fontFamily: 'DM Sans, sans-serif',
+            whiteSpace: 'nowrap',
+          }}>
+            ← Home
+          </Link>
+        )}
+        <div className="nav-theme-toggle">
+          <ThemeToggle />
+        </div>
       </div>
       <div style={{ display: 'flex', gap: '4px' }}>
         {tabs.map(t => {
