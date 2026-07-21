@@ -51,7 +51,7 @@ type Hotel = {
   // so drivers can decide if the detour is worth it.
   distance_off_route_mi?: number | null
   near_interstate?: { name: string | null } | null
-  exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; interstates?: { name: string | null } | null } | null
+  exits?: { lat: number | null; lng: number | null; city: string | null; state: string | null; mile_marker: number | null; route_position: number | null; interstates?: { name: string | null } | null } | null
   distance: number | null
 }
 
@@ -528,6 +528,21 @@ export default function HomePage() {
   // × 1.25 (the prior 'approx' behavior). Updates progressively as batches
   // come back — drivers see haversine first, then real numbers replace.
   const [drivingMiles, setDrivingMiles] = useState<Map<string, number>>(new Map())
+
+  // Position along the corridor, used for all ahead/behind math. Prefers
+  // route_position (continuous miles from the route's south/west end,
+  // derived from lat/lng) and falls back to mile_marker where the backfill
+  // hasn't run. mile_marker holds EXIT NUMBERS, which are not monotonic on
+  // every corridor — I-87 restarts numbering at Albany (Thruway 1-24, then
+  // Northway 1-44), so Harriman reads as 45 while Albany reads as 4 despite
+  // sitting 150 mi apart. Sorting or direction-filtering on that column
+  // silently drops legitimate stops from a long-range planning list.
+  const routePos = (h: Hotel): number | null => {
+    const rp = h.exits?.route_position
+    if (rp != null) return Number(rp)
+    const mm = h.exits?.mile_marker
+    return mm != null ? Number(mm) : null
+  }
   // Two-state category toggle. We deliberately don't offer 'All' — drivers
   // who want hotels and RV parks together would just be confused by mixing
   // them, and most travelers know which they need before opening the app.
@@ -755,7 +770,7 @@ export default function HomePage() {
       // returns its full slice. Two pages cover up to 2000 rows; we'll
       // need to paginate further (or move to a smarter query) when the
       // platform crosses ~2000 hotels per category.
-      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,distance_from_exit_mi,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,interstates(name))'
+      const baseSelect = 'id,name,phone,address,street_address,city,state,zip,latitude,longitude,price_min,price_max,amenities,featured,exit_id,boost_price,boost_ends_at,verified,verification_source,distance_from_exit_mi,type,distance_off_route_mi,near_interstate:near_interstate_id(name),exits(lat,lng,city,state,mile_marker,route_position,interstates(name))'
       const buildQuery = (start: number, end: number) => {
         let q = supabase
           .from('hotels')
@@ -873,7 +888,7 @@ export default function HomePage() {
       if (iname !== selectedInterstate) continue
       const lat = h.exits?.lat
       const lng = h.exits?.lng
-      const mm = h.exits?.mile_marker
+      const mm = routePos(h)
       if (lat == null || lng == null || mm == null) continue
       const d = milesBetween(userLoc.lat, userLoc.lng, Number(lat), Number(lng))
       if (d < bestDist) {
@@ -922,7 +937,7 @@ export default function HomePage() {
       if (iname !== selectedInterstate) continue
       const lat = h.exits?.lat
       const lng = h.exits?.lng
-      const mm = h.exits?.mile_marker
+      const mm = routePos(h)
       if (lat == null || lng == null || mm == null) continue
       const pos = axis === 'NS' ? Number(lat) : Number(lng)
       pairs.push({ pos, mm: Number(mm) })
@@ -1161,7 +1176,7 @@ export default function HomePage() {
 
       const lat = h.latitude ?? h.exits?.lat
       const lng = h.longitude ?? h.exits?.lng
-      const hMM = h.exits?.mile_marker
+      const hMM = routePos(h)
       if (lat == null || lng == null) return false
 
       // MM path — preferred when we know both the driver's MM and the
@@ -1278,8 +1293,8 @@ export default function HomePage() {
 
     // Use real distance when available, else mile marker as a deterministic
     // fallback so 'closest' is still meaningful when GPS is denied.
-    const aDist = a.distance ?? a.exits?.mile_marker ?? Number.POSITIVE_INFINITY
-    const bDist = b.distance ?? b.exits?.mile_marker ?? Number.POSITIVE_INFINITY
+    const aDist = a.distance ?? routePos(a) ?? Number.POSITIVE_INFINITY
+    const bDist = b.distance ?? routePos(b) ?? Number.POSITIVE_INFINITY
 
     // When driver-distance is meaningfully different, that's the primary
     // ranking. Use a 0.1 mi tolerance so floating-point noise doesn't
