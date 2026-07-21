@@ -169,12 +169,24 @@ function bearingToDirection(bearing: number, axis: 'NS' | 'EW'): 'N' | 'S' | 'E'
 // Insert a call_logs row. Returns the new row's id when from_boost is true
 // so the caller can hand it to trackApproach() for arrival proof. Non-boost
 // calls don't bother — no need to track arrival for organic taps.
+// Guards against a single tap logging twice. Observed in production: one
+// Call tap produced two rows 0.8s apart with distances 9.25 and 9.24, meaning
+// the handler ran twice across a re-render. Call count is what a hotelier is
+// shown, so a double-count is worse than a missed one. The RPC de-dupes
+// server-side too — this just avoids the pointless round trip.
+const recentCallLogs = new Map<string, number>()
+const CALL_DEDUPE_MS = 20000
+
 async function logCall(
   hotelId: string,
   fromBoost: boolean = false,
   initialDistanceMi: number | null = null,
 ): Promise<string | null> {
   try {
+    const last = recentCallLogs.get(hotelId)
+    if (last && Date.now() - last < CALL_DEDUPE_MS) return null
+    recentCallLogs.set(hotelId, Date.now())
+
     // Goes through the log_call RPC rather than a direct insert. PostgREST
     // implements .select() after .insert() as INSERT ... RETURNING, which
     // requires a SELECT policy — and anon has none on call_logs, because call

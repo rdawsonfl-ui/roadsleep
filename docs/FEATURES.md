@@ -110,6 +110,27 @@ the listing was boosted, and the marketing source for the session. This log is
 the product's core proprietary data — first-party evidence of purchase intent
 that no competitor has.
 
+The write goes through the `log_call` SECURITY DEFINER RPC, not a direct insert.
+The caller needs the new row's id back so the approach tracker can update it,
+and PostgREST implements that as `INSERT ... RETURNING` — which requires a
+SELECT policy. Anon has none on `call_logs`, because call logs are hotelier
+business data. The RPC returns the id of the row the caller just created
+without granting any read access to the table.
+
+**De-duplication.** A single tap was observed producing two rows ~0.8s apart
+(distances 9.25 and 9.24 on the same hotel), meaning the handler ran twice
+across a re-render. Call count is the headline number shown to a hotelier, so
+over-counting is the one failure this table can't have. Guarded in two places:
+a 20-second in-memory guard per hotel on the client, and a 20-second lookback in
+`log_call` that returns the existing row's id rather than inserting again. The
+server-side guard is the one that matters — three separate pages write call
+logs, and a client-only fix would leave two of them exposed.
+
+**What the log does and doesn't prove.** It records the *tap*, not a connected
+call. A driver who taps and hangs up before it rings still produces a row. The
+honest phrasing for a hotelier is "12 drivers tapped to call you," not "12
+completed calls."
+
 **Directions** builds a Google Maps URL that launches voice-guided turn-by-turn
 immediately rather than the preview-with-a-Start-button page. The parameters
 that make this work (`dir_action=navigate`, `travelmode=driving`, and an
@@ -138,11 +159,25 @@ behind a just-in-time consent modal (`lib/consent.ts`,
 device and reversible from `/privacy`. Ordinary map-style geolocation is *not*
 gated this way — the browser's own permission prompt covers it.
 
-**Important caveat:** iOS Safari suspends background JavaScript within about 30
-seconds, so the 90-minute tracker rarely completes in practice. The "arrived"
-indicator was removed from the hotelier dashboard for that reason. The
-`arrived_at` column is preserved because the planned replacement — an SMS
-check-in link — slots into the same column. See `TODO.md`.
+**Two caveats, and the second one was hidden for months.**
+
+First, iOS Safari suspends background JavaScript within about 30 seconds, so the
+90-minute tracker rarely completes in practice. The "arrived" indicator was
+removed from the hotelier dashboard for that reason.
+
+Second — and this was the larger problem — `call_logs` had no UPDATE policy, and
+Postgres enforces SELECT policies on any UPDATE carrying a WHERE clause. Anon
+cannot read `call_logs` by design, so every tracking write matched zero rows and
+was discarded silently from the day the feature shipped. PostgREST reports an
+RLS-blocked update as success, and the client discarded the result, so nothing
+ever surfaced. Fixed in July 2026 by routing tracking through the
+`record_call_progress` SECURITY DEFINER RPC, which also refuses to touch a call
+log older than three hours so old ids can't be replayed to fabricate arrivals.
+
+Expect arrivals to start recording now, but expect the capture rate to stay low
+because of the iOS limitation. Treat it as supporting colour, never as the
+headline metric. The `arrived_at` column also feeds the planned SMS check-in
+replacement. See `TODO.md`.
 
 ### 1.11 Campaign source attribution
 
@@ -226,19 +261,20 @@ File: `app/admin/page.tsx`, gated by `app/admin/AdminGate.tsx`. Five tabs.
 
 ### 3.1 The gate
 
-A single shared password, stored as a bcrypt hash in the `settings` table under
-`admin_password`. Verification goes through the `verify_admin_password` RPC — a
-SECURITY DEFINER function, so an anonymous caller can check a password but
-cannot read the table or extract the hash. `change_admin_password` requires the
-current password, so a hijacked open session can't silently rotate the
-credential.
+Email and password through Supabase Auth, followed by an `is_site_admin()`
+check against the `site_admins` table. A hotelier who signs in and navigates to
+`/admin` is signed straight back out — authenticated is not the same as admin.
+Session state comes from Supabase, not a `localStorage` flag.
 
-A `localStorage` flag (`rs_admin_ok`) remembers that this device passed the
-check. Clearing it, or hitting Logout, forces a re-prompt.
+Granting admin is a single insert into `site_admins`; revoking is the matching
+delete. There is deliberately no UI for it — see `RUNBOOK.md`.
 
-This is deliberately not a full auth system — it's one shared operator
-credential. That's appropriate for a single-operator business and should be
-replaced with real Supabase Auth roles if the operator ever adds staff.
+**Why it changed (July 2026).** The gate used to be one shared password checked
+in the browser, after which the client still talked to Postgres as `anon`.
+Postgres therefore had no way to tell the owner from a visitor, which forced
+every admin write policy to `USING(true)`. The policies were named "Admin insert
+hotels"; the expressions granted it to anyone holding the public anon key. See
+`DECISION_LOG.md` D-14.
 
 ### 3.2 Hotels tab
 
@@ -317,17 +353,29 @@ Supporting tables: `hoteliers`, `call_logs`, `campaign_visits`, `settings`,
 
 ### 4.2 Security posture
 
-RLS is enabled on the core tables with public read for drivers. Write access on
-inventory is broad by policy and gated in practice by the admin password and by
-hotelier auth. Sensitive operations (admin password verify/change, contact email
-change, boost expiry) go through SECURITY DEFINER RPCs rather than direct table
-access.
+RLS is enabled *and scoped* on every table. Drivers (anon) read `hotels`,
+`exits` and `interstates` and can write call logs through an RPC; they cannot
+read hotelier records, call logs, or campaign data. Hoteliers see only rows tied
+to their own `auth.uid()`. Writes require admin or ownership. Admin is an
+identity in `site_admins`, checked by `is_site_admin()`.
 
-Two known items: the `google_check` table has RLS disabled, and Supabase
-credentials are hard-coded as fallbacks in `lib/supabase.ts` so the app builds
-without env vars. The anon key is designed to be public and is protected by RLS,
-so that fallback is defensible — but the service role key must only ever come
-from an environment variable.
+Operations that need to cross a policy boundary go through SECURITY DEFINER
+RPCs rather than loosened policies: `log_call`, `record_call_progress`,
+`link_my_hotelier_record`, `expire_finished_boosts`, contact email change.
+
+**Prior state, disclosed.** Until July 2026 the write policies on `hotels` and
+`hoteliers` were `USING(true)` with no role restriction, and `hoteliers`,
+`call_logs` and `campaign_visits` were world-readable. Anyone with the public
+anon key could have read every hotelier account or repointed any listing's phone
+number. Verified closed by querying as the `anon` role. Note the lesson: RLS
+being *enabled* is not the same as RLS being *scoped*, and an earlier version of
+this document described the intended model rather than the deployed one.
+
+Remaining item: Supabase credentials are hard-coded as fallbacks in
+`lib/supabase.ts` so the app builds without env vars. The anon key is designed
+to be public and is now genuinely protected by RLS, so that fallback is
+defensible — but the service role key must only ever come from an environment
+variable.
 
 ### 4.3 Progressive web app
 
