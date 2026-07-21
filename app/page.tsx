@@ -2039,10 +2039,18 @@ export default function HomePage() {
             requires knowing the road network, which a driver from out of state
             doesn't.
 
-            Shows only when the corridor genuinely runs out short of what they
-            asked for: results exist, and the furthest one is comfortably inside
-            their slider setting. Uses the intersection table already loaded —
-            no routing call, no extra data. */}
+            Shows only when the listings run out short of what they asked for:
+            results exist, and the furthest one is comfortably inside their
+            slider setting. Uses the intersection table already loaded — no
+            routing call, no extra data.
+
+            Careful with the wording. I-87 is the only corridor whose full
+            length is actually in the database (327 mi of ~333), so it's the
+            only one where running out of listings really does mean the road
+            ended. Everywhere else coverage stops well short of the highway —
+            I-10 holds 1,037 mi of a 2,460 mi road, I-81 535 of 855. Saying
+            "I-75 ends here" to a driver on I-75 would simply be false, so the
+            copy talks about listings, which is true in both cases. */}
         {(() => {
           if (loading || filtered.length === 0 || !userLoc) return null
           if (targetDistance >= 1000 || !selectedInterstate) return null
@@ -2094,10 +2102,11 @@ export default function HomePage() {
                 fontSize: '14px', fontWeight: 700, color: 'var(--white)',
                 marginBottom: '4px',
               }}>
-                {selectedInterstate}{effectiveDirection ? ` ${dirWord(effectiveDirection)}` : ''} ends about {Math.round(furthest)} mi out
+                Last {category === 'rv_park' ? 'RV park' : 'hotel'} on {selectedInterstate}
+                {effectiveDirection ? ` ${dirWord(effectiveDirection)}` : ''} is {Math.round(furthest)} mi out
               </div>
               <div style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
-                Still planning further? Continue on a connecting route:
+                Planning further out? Pick up a connecting route:
               </div>
               {options.map(o => (
                 <button
