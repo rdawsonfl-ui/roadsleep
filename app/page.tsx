@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import SiteFooter from '@/app/components/SiteFooter'
-import ThemeToggle from '@/app/components/ThemeToggle'
 import { getDrivingDistances } from '@/lib/mapbox'
 import { getSource } from '@/lib/analytics'
 
@@ -1278,33 +1277,24 @@ export default function HomePage() {
   return (
     <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '20px 16px 48px' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-        {/* Title + subtitle adapt to the active category. Hotels typically
-            sit AT exits (their whole business model is catching tired drivers
-            exiting the highway), so 'next exit' is accurate for hotels. RV
-            parks sit OFF the highway, often 5–20 mi out, so 'next exit' is
-            misleading for them — instead we say 'ahead on your route' since
-            we surface them sorted by closeness to the driver's route. */}
+        {/* H1 carries the wordmark now — the nav gave up its logo slot to the
+            Day/Night toggle, so the brand has to land here. Suffix adapts to
+            the active category so the driver still sees what they're looking
+            at. */}
         <h1 style={{ fontSize: '26px', fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '4px' }}>
-          {category === 'rv_park' ? (
-            <>RV Parks <span style={{ color: 'var(--amber)' }}>ahead on your route</span></>
-          ) : (
-            <>Hotels at your <span style={{ color: 'var(--amber)' }}>next exit</span></>
-          )}
+          Road<span style={{ color: 'var(--amber)' }}>Sleep</span>
+          <sup style={{ fontSize: '0.4em', marginLeft: '1px', fontWeight: 600, verticalAlign: 'super' }}>™</sup>
+          {' — '}
+          {category === 'rv_park' ? 'RV Parks' : 'Hotels'}
         </h1>
-        {/* RV parks keep their subtitle — 'ahead on your route' is vague on its
-            own and the line does real work explaining that these sit off the
-            highway. The hotels subtitle ('Hotels along major interstates') was
-            pure restatement of the H1 and gave up its slot to the theme
-            toggle, which needs to be reachable without scrolling. */}
+        {/* RV parks keep their subtitle — it does real work explaining that
+            these sit off the highway. Hotels don't need one; they sit at the
+            exit and the interstate/direction controls below say the rest. */}
         {category === 'rv_park' && (
           <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '12px' }}>
             RV parks within driving distance of your interstate
           </p>
         )}
-        <div style={{ marginTop: category === 'rv_park' ? 0 : '10px' }}>
-          <ThemeToggle />
-        </div>
-
         {locStatus === 'denied' && (
           <div style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: 'var(--mist)' }}>
             📍 Location blocked. Distance filtering disabled. <button onClick={() => window.location.reload()} style={{ background: 'none', border: 'none', color: 'var(--amber)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>Enable GPS</button> to see nearest {category === 'rv_park' ? 'RV parks' : 'hotels'}.

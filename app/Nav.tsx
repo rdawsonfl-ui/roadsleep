@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import ThemeToggle from '@/app/components/ThemeToggle'
 
 export default function Nav() {
   const path = usePathname()
@@ -26,16 +27,13 @@ export default function Nav() {
       top: 0,
       zIndex: 100,
     }}>
-      <Link href="/" style={{
-        fontFamily: 'Syne, sans-serif',
-        fontWeight: 800,
-        fontSize: '22px',
-        color: 'var(--white)',
-        letterSpacing: '-0.5px',
-        textDecoration: 'none',
-      }}>
-        Road<span style={{ color: 'var(--amber)' }}>Sleep</span><sup style={{ fontSize: '0.5em', marginLeft: '1px', fontWeight: 600 }}>™</sup>
-      </Link>
+      {/* Day/Night toggle lives in the nav bar now — it needs to be
+          reachable from every page without scrolling, and it took the
+          slot the wordmark used to hold. The wordmark moved into the
+          page H1. 'Find a Stop' still links home. */}
+      <div className="nav-theme-toggle">
+        <ThemeToggle />
+      </div>
       <div style={{ display: 'flex', gap: '4px' }}>
         {tabs.map(t => {
           const active = path === t.href || (t.href !== '/' && path.startsWith(t.href))

@@ -122,6 +122,9 @@
   padding: 3px;
   margin-bottom: 20px;
 }
+.nav-theme-toggle .theme-toggle {
+  margin-bottom: 0;
+}
 .theme-toggle button {
   appearance: none;
   border: none;
