@@ -175,40 +175,28 @@ async function logCall(
   initialDistanceMi: number | null = null,
 ): Promise<string | null> {
   try {
-    const insert: Record<string, unknown> = {
-      hotel_id: hotelId,
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
-      // Mark the call when the driver tapped a currently-boosted listing.
-      // Hoteliers can then see, on their dashboard, how many of today's
-      // calls were attributable to the boost vs. organic placement.
-      // Column is nullable for backwards compatibility with rows logged
-      // before this column existed.
-      from_boost: fromBoost,
+    // Goes through the log_call RPC rather than a direct insert. PostgREST
+    // implements .select() after .insert() as INSERT ... RETURNING, which
+    // requires a SELECT policy — and anon has none on call_logs, because call
+    // logs are hotelier business data. A direct insert-and-return therefore
+    // fails outright under RLS. The RPC is SECURITY DEFINER, so it can hand
+    // back the id of the row the caller just created without granting any
+    // read access to the table.
+    const { data, error } = await supabase.rpc('log_call', {
+      p_hotel_id: hotelId,
+      p_from_boost: fromBoost,
+      p_distance_mi: initialDistanceMi != null ? Number(initialDistanceMi.toFixed(2)) : null,
       // Marketing channel the driver arrived through (billboard, QR, NFC,
       // social, SEO), if any — captured on landing, null for direct traffic.
-      source: getSource(),
-    }
-    // Snapshot the distance at the moment of tap so the dashboard can show
-    // 'closed from 12mi to 0.2mi' rather than just 'arrived'. Only meaningful
-    // when we actually have a GPS fix; null otherwise.
-    // Capture the driver's distance at tap for EVERY call, not just boosted
-    // ones — this is what populates 'avg miles at tap' on the hotelier report.
-    // The page already holds a live GPS fix from the nearby-hotel sort, so
-    // there's no extra permission prompt; we were simply discarding this on
-    // organic taps before. closest_approach seeds to the same value since
-    // there's no reliable post-call tracking on web.
-    if (initialDistanceMi != null) {
-      const d = Number(initialDistanceMi.toFixed(2))
-      insert.initial_distance_mi = d
-      insert.closest_approach_mi = d
-    }
-    const { data, error } = await supabase
-      .from('call_logs').insert(insert).select('id').single()
+      p_source: getSource(),
+      p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+      p_referrer: typeof document !== 'undefined' ? document.referrer : null,
+    })
     if (error) {
       console.error('call log failed', error)
       return null
     }
-    return data?.id ?? null
+    return (data as string | null) ?? null
   } catch (e) {
     console.error('call log failed', e)
     return null
