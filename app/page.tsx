@@ -1387,7 +1387,7 @@ export default function HomePage() {
   })
 
   return (
-    <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '20px 16px 48px' }}>
+    <main style={{ background: 'var(--night)', minHeight: 'calc(100vh - 56px)', padding: '10px 16px 48px' }}>
       <div style={{ maxWidth: '720px', margin: '0 auto' }}>
         {/* H1 carries the wordmark now — the nav gave up its logo slot to the
             Day/Night toggle, so the brand has to land here. Suffix adapts to
@@ -1400,7 +1400,7 @@ export default function HomePage() {
             size. Sized in vw so it still scales with the screen and stays on
             one line, capped so it doesn't balloon on desktop. */}
         <h1 style={{
-          margin: '0 0 12px',
+          margin: '0 0 4px',
           textAlign: 'center',
           fontFamily: 'Syne, sans-serif',
           fontWeight: 800,
@@ -1418,14 +1418,22 @@ export default function HomePage() {
             marginLeft: '2px',
           }}>™</sup>
         </h1>
-        {/* RV parks keep their subtitle — it does real work explaining that
-            these sit off the highway. Hotels don't need one; they sit at the
-            exit and the interstate/direction controls below say the rest. */}
-        {category === 'rv_park' && (
-          <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '12px' }}>
-            RV parks within driving distance of your interstate
-          </p>
-        )}
+        {/* Tagline. With the wordmark alone in the H1, nothing on screen told a
+            first-time driver what this is for — they landed on controls with no
+            framing. This is the one line that says it. Swaps for RV parks
+            because they sit OFF the highway, often 5-20 mi out, so promising
+            them "at upcoming exits" would be false. */}
+        <p style={{
+          color: 'var(--fog)',
+          fontSize: '15px',
+          fontWeight: 500,
+          textAlign: 'center',
+          margin: '0 0 16px',
+        }}>
+          {category === 'rv_park'
+            ? 'RV Parks Along Your Route'
+            : 'Hotels at Upcoming Exits'}
+        </p>
         {locStatus === 'denied' && (
           <div style={{ background: 'rgba(245,166,35,0.1)', border: '1px solid var(--amber)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '12px', color: 'var(--mist)' }}>
             📍 Location blocked. Distance filtering disabled. <button onClick={() => window.location.reload()} style={{ background: 'none', border: 'none', color: 'var(--amber)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>Enable GPS</button> to see nearest {category === 'rv_park' ? 'RV parks' : 'hotels'}.
