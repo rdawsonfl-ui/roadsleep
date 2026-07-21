@@ -15,17 +15,25 @@ const STORAGE_KEY = 'rs_admin_ok'
 export default function AdminGate({ children }: { children: React.ReactNode }) {
   const [ok, setOk] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
-  const [showChange, setShowChange] = useState(false)
   const [showChangeEmail, setShowChangeEmail] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-    if (typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY) === '1') {
-      setOk(true)
-    }
+    ;(async () => {
+      // Restore from the Supabase session rather than a localStorage flag.
+      // The old flag was self-asserted: setting rs_admin_ok=1 in devtools got
+      // you the admin UI. It still granted no extra DB rights on its own, but
+      // there's no reason to hand out the console.
+      const { data } = await supabase.auth.getSession()
+      if (data.session) {
+        const { data: isAdmin } = await supabase.rpc('is_site_admin')
+        if (isAdmin === true) setOk(true)
+      }
+      setMounted(true)
+    })()
   }, [])
 
   const login = async (e: React.FormEvent) => {
@@ -34,18 +42,31 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
     setBusy(true)
     setErr('')
     try {
-      const { data, error } = await supabase.rpc('verify_admin_password', { candidate: pw })
-      if (error) {
-        setErr('Could not verify — try again')
+      // Real Supabase Auth sign-in, replacing the old bcrypt-password-in-the-
+      // browser check. That old path left the browser talking to Postgres as
+      // `anon`, which meant every admin write policy had to be USING(true) —
+      // i.e. anyone holding the public anon key could edit hotels and hotelier
+      // records. Signing in gives Postgres a principal to check, so the
+      // policies can name it.
+      const { error: authErr } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: pw,
+      })
+      if (authErr) {
+        setErr('Wrong email or password')
         setTimeout(() => setErr(''), 3000)
-      } else if (data === true) {
-        localStorage.setItem(STORAGE_KEY, '1')
-        setOk(true)
-        setPw('')
-      } else {
-        setErr('Wrong password')
-        setTimeout(() => setErr(''), 3000)
+        return
       }
+      // Authenticated is not the same as admin — hoteliers have logins too.
+      const { data: isAdmin } = await supabase.rpc('is_site_admin')
+      if (isAdmin !== true) {
+        await supabase.auth.signOut()
+        setErr('That account is not an admin')
+        setTimeout(() => setErr(''), 3000)
+        return
+      }
+      setOk(true)
+      setPw('')
     } catch {
       setErr('Network error — try again')
       setTimeout(() => setErr(''), 3000)
@@ -55,6 +76,7 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
   }
 
   const logout = () => {
+    supabase.auth.signOut()
     localStorage.removeItem(STORAGE_KEY)
     setOk(false)
   }
@@ -81,10 +103,10 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
         justifyContent: 'flex-end',
         gap: '8px',
       }}>
-        <button onClick={() => setShowChange(true)} style={{
-          background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--fog)',
-          padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px',
-        }}>Change Password</button>
+        {/* 'Change Password' removed: it rotated the old bcrypt hash in the
+            settings table, which no longer gates anything now that admin uses
+            Supabase Auth. Change the password from Supabase Auth instead —
+            leaving the button would have silently edited a dead value. */}
         <button onClick={() => setShowChangeEmail(true)} style={{
           background: 'var(--night3)', border: '1px solid var(--border)', color: 'var(--fog)',
           padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px',
@@ -94,7 +116,6 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
           padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px',
         }}>Logout</button>
       </div>
-      {showChange && <ChangePasswordModal onClose={() => setShowChange(false)} />}
       {showChangeEmail && <ChangeContactEmailModal onClose={() => setShowChangeEmail(false)} />}
       {children}
     </>
@@ -110,15 +131,25 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
           Admin <span style={{ color: 'var(--amber)' }}>Login</span>
         </h1>
         <p style={{ color: 'var(--fog)', fontSize: '13px', marginBottom: '20px' }}>
-          Enter the admin password to continue
+          Sign in with your admin account
         </p>
         <form onSubmit={login}>
+          <label className="dark-label">Email</label>
+          <input
+            type="email"
+            className="dark-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="username"
+            autoFocus
+            style={{ width: '100%', marginBottom: '12px' }}
+          />
           <label className="dark-label">Password</label>
           <PasswordInput
             value={pw}
             onChange={setPw}
             placeholder="••••••••••"
-            autoFocus
             variant="dark-input"
           />
           {err && (
