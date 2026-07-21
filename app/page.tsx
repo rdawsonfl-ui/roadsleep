@@ -1492,7 +1492,12 @@ export default function HomePage() {
                     flex: 1,
                     maxWidth: '180px',
                     background: active ? '#22c55e' : 'transparent',
-                    color:      active ? '#fff'    : '#22c55e',
+                    /* Inactive label uses the theme text token: near-black in
+                       Day mode as requested. Literal #000 would vanish against
+                       the near-black Night background, which is the mode a
+                       driver is actually in at 10pm. Border stays green so the
+                       control still reads as the direction picker. */
+                    color:      active ? '#fff'    : 'var(--white)',
                     border:     '1px solid #22c55e',
                     borderRadius: '8px',
                     padding: '10px 14px',
