@@ -1281,9 +1281,18 @@ export default function HomePage() {
             Day/Night toggle, so the brand has to land here. Suffix adapts to
             the active category so the driver still sees what they're looking
             at. */}
-        <h1 style={{ fontSize: '52px', lineHeight: 1.05, fontFamily: 'Syne, sans-serif', color: 'var(--white)', marginBottom: '10px' }}>
+        <h1 style={{
+          /* Scales with viewport so the whole line always fits on one row —
+             nowrap alone would just overflow a narrow phone. Caps at 52px so
+             it doesn't get absurd on desktop. */
+          fontSize: 'clamp(24px, 7.6vw, 52px)',
+          whiteSpace: 'nowrap',
+          lineHeight: 1.05,
+          fontFamily: 'Syne, sans-serif',
+          color: 'var(--white)',
+          marginBottom: '10px',
+        }}>
           Road<span style={{ color: 'var(--amber)' }}>Sleep</span>
-          <sup style={{ fontSize: '0.4em', marginLeft: '1px', fontWeight: 600, verticalAlign: 'super' }}>™</sup>
           {' — '}
           {category === 'rv_park' ? 'RV Parks' : 'Hotels'}
         </h1>
