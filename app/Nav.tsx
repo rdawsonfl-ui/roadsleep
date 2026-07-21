@@ -10,7 +10,6 @@ export default function Nav() {
   // to it from the nav so casual visitors and drivers don't see it. The site
   // owner gets there by typing the URL directly.
   const tabs = [
-    { href: '/',         label: 'Find a Stop' },
     { href: '/hotelier', label: 'Hotel/Park Owner' },
   ]
   return (
