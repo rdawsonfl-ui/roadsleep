@@ -1326,10 +1326,10 @@ export default function HomePage() {
         <h1 style={{ margin: '0 0 12px', textAlign: 'center', overflow: 'hidden' }} aria-label="RoadSleep">
           <svg
             viewBox="0 0 1000 132"
-            width="105%"
+            width="100%"
             role="img"
             aria-hidden="true"
-            style={{ display: 'block', marginLeft: '-2.5%' }}
+            style={{ display: 'block' }}
           >
             <text
               x="0"
