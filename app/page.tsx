@@ -2056,12 +2056,24 @@ export default function HomePage() {
           // its job.
           if (furthest <= 0 || targetDistance - furthest < 50) return null
 
+          const dirWord = (d: 'N'|'S'|'E'|'W' | null) =>
+            d === 'N' ? 'Northbound' : d === 'S' ? 'Southbound'
+            : d === 'E' ? 'Eastbound' : d === 'W' ? 'Westbound' : ''
+
+          const currentAxis = INTERSTATE_AXIS[selectedInterstate]
           const links = INTERSTATE_INTERSECTIONS[selectedInterstate] || {}
           const options = Object.entries(links)
             .map(([name, pt]) => ({
               name,
               nearCity: pt.nearCity,
               miles: milesBetween(userLoc.lat, userLoc.lng, pt.lat, pt.lng),
+              // Direction only carries over when both roads run on the same
+              // axis. Southbound on I-87 means southbound on I-95; it means
+              // nothing on I-40, which runs east-west. In that case we leave
+              // the direction unset and let GPS infer it after the switch,
+              // rather than labelling the button with a heading that doesn't
+              // apply to the new road.
+              carryDir: INTERSTATE_AXIS[name] === currentAxis ? effectiveDirection : null,
             }))
             // Only crossings the driver hasn't already passed, and only ones
             // inside the range they asked about.
@@ -2082,7 +2094,7 @@ export default function HomePage() {
                 fontSize: '14px', fontWeight: 700, color: 'var(--white)',
                 marginBottom: '4px',
               }}>
-                {selectedInterstate} ends about {Math.round(furthest)} mi out
+                {selectedInterstate}{effectiveDirection ? ` ${dirWord(effectiveDirection)}` : ''} ends about {Math.round(furthest)} mi out
               </div>
               <div style={{ fontSize: '13px', color: 'var(--fog)', marginBottom: '12px' }}>
                 Still planning further? Continue on a connecting route:
@@ -2094,6 +2106,9 @@ export default function HomePage() {
                     setSelectedInterstate(o.name)
                     setInterstateUserTouched(true)
                     setAutoSwitchedTo(null)
+                    // Keep heading when the axis matches; otherwise clear it so
+                    // GPS re-infers on the new road.
+                    setSelectedDirection(o.carryDir)
                     window.scrollTo({ top: 0, behavior: 'smooth' })
                   }}
                   style={{
@@ -2107,7 +2122,7 @@ export default function HomePage() {
                     fontFamily: 'inherit', cursor: 'pointer',
                   }}
                 >
-                  <span>Switch to {o.name}</span>
+                  <span>Switch to {o.name}{o.carryDir ? ` ${dirWord(o.carryDir)}` : ''}</span>
                   <span style={{ fontSize: '12px', opacity: 0.85 }}>
                     joins near {o.nearCity} · {Math.round(o.miles)} mi
                   </span>
