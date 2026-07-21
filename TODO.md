@@ -18,6 +18,11 @@ Last touched: 2026-07-21
   every zero-coverage exit filled. Network at ~2,007 live hotels.
 - **Corridor auto-switch** now releases a manual pill selection once the driver
   has clearly left that road.
+- **Audit fixes:** `call_logs` tracking writes never worked (no UPDATE policy +
+  SELECT-policy enforcement on UPDATE) — replaced with the
+  `record_call_progress` RPC. `settings` had no write policy, so the admin
+  "show unverified to drivers" toggle silently did nothing — fixed. Admin
+  could only read 2 of 4 settings keys — fixed.
 - UI: Day/Night toggle moved to nav, wordmark into the page H1, "Find a Stop"
   removed, ← Home added off-homepage, cards show "Exit 45" not "MM 45".
 

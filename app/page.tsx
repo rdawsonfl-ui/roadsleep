@@ -254,9 +254,15 @@ function trackApproach(
     if (cancelled || arrived) return
     if (Date.now() - startedAt > MAX_TRACKING_MS) {
       // Window expired — final write of tracking_ended_at and we're done.
-      supabase.from('call_logs').update({
-        tracking_ended_at: new Date().toISOString(),
-      }).eq('id', callLogId).then(undefined, () => {})
+      // Goes through the RPC, not a direct update: anon has no SELECT policy
+      // on call_logs (it's hotelier business data), and Postgres enforces
+      // SELECT policies on any UPDATE with a WHERE clause. Direct updates
+      // matched zero rows and failed silently, which is why arrival data was
+      // never recorded before July 2026.
+      supabase.rpc('record_call_progress', {
+        p_call_log_id: callLogId,
+        p_end_tracking: true,
+      }).then(undefined, () => {})
       return
     }
     navigator.geolocation.getCurrentPosition(
@@ -277,16 +283,14 @@ function trackApproach(
 
         if (d < closestMi) {
           closestMi = d
-          const update: Record<string, unknown> = {
-            closest_approach_mi: Number(d.toFixed(2)),
-          }
-          if (d < ARRIVAL_THRESHOLD_MI && !arrived) {
-            arrived = true
-            update.arrived_at = new Date().toISOString()
-            update.tracking_ended_at = new Date().toISOString()
-          }
-          supabase.from('call_logs').update(update).eq('id', callLogId)
-            .then(undefined, () => {})
+          const isArrival = d < ARRIVAL_THRESHOLD_MI && !arrived
+          if (isArrival) arrived = true
+          supabase.rpc('record_call_progress', {
+            p_call_log_id: callLogId,
+            p_closest_mi: Number(d.toFixed(2)),
+            p_arrived: isArrival,
+            p_end_tracking: isArrival,
+          }).then(undefined, () => {})
         }
 
         if (!arrived) {
@@ -309,9 +313,10 @@ function trackApproach(
     cancelled = true
     // Best-effort: stamp tracking_ended_at so the dashboard knows the
     // tracker terminated cleanly rather than going stale.
-    supabase.from('call_logs').update({
-      tracking_ended_at: new Date().toISOString(),
-    }).eq('id', callLogId).then(undefined, () => {})
+    supabase.rpc('record_call_progress', {
+      p_call_log_id: callLogId,
+      p_end_tracking: true,
+    }).then(undefined, () => {})
   }
 }
 

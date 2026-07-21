@@ -176,9 +176,14 @@ navigation is handed to Apple or Google Maps and this app is backgrounded, so
 it cannot announce anything. Maps also announces the exit and the correct side
 of the road, which this app cannot know. See D-16.
 
-**Arrival tracking rarely completes.** iOS Safari suspends background JavaScript
-within roughly 30 seconds, so the 90-minute GPS tracker almost never runs to
-completion. The arrival indicator was pulled from the hotelier dashboard rather
+**Arrival tracking rarely completes.** Two causes, and the documented one was
+not the main one. `call_logs` had no UPDATE policy, and Postgres enforces
+SELECT policies on any UPDATE carrying a WHERE clause — anon cannot read
+`call_logs` by design, so every tracking write matched zero rows and failed
+silently from the day the feature shipped. Fixed July 2026 with the
+`record_call_progress` SECURITY DEFINER RPC. iOS Safari suspending background
+JavaScript within ~30 seconds is real, but it was the second problem, not the
+first. The arrival indicator was pulled from the hotelier dashboard rather
 than show misleading data. The `arrived_at` column is retained for the planned
 SMS-based replacement documented in `TODO.md`. This is a platform limitation,
 not a bug to fix in this codebase.
