@@ -1281,20 +1281,32 @@ export default function HomePage() {
             Day/Night toggle, so the brand has to land here. Suffix adapts to
             the active category so the driver still sees what they're looking
             at. */}
-        <h1 style={{
-          /* Scales with viewport so the whole line always fits on one row —
-             nowrap alone would just overflow a narrow phone. Caps at 52px so
-             it doesn't get absurd on desktop. */
-          fontSize: 'clamp(24px, 7.6vw, 52px)',
-          whiteSpace: 'nowrap',
-          lineHeight: 1.05,
-          fontFamily: 'Syne, sans-serif',
-          color: 'var(--white)',
-          marginBottom: '10px',
-        }}>
-          Road<span style={{ color: 'var(--amber)' }}>Sleep</span>
-          {' — '}
-          {category === 'rv_park' ? 'RV Parks' : 'Hotels'}
+        {/* Rendered as SVG so the wordmark always fills the container width
+            exactly — one line, as large as the screen allows, no guessing at
+            font metrics. textLength + lengthAdjust force the exact fit, so it
+            can never wrap or clip on a narrow phone. Text is static ("Hotels"
+            regardless of category) by request. */}
+        <h1 style={{ margin: '0 0 12px' }} aria-label="RoadSleep — Hotels">
+          <svg
+            viewBox="0 0 1000 132"
+            width="100%"
+            role="img"
+            aria-hidden="true"
+            style={{ display: 'block' }}
+          >
+            <text
+              x="0"
+              y="100"
+              textLength="1000"
+              lengthAdjust="spacingAndGlyphs"
+              fontFamily="Syne, sans-serif"
+              fontWeight="800"
+              fontSize="100"
+              fill="var(--white)"
+            >
+              Road<tspan fill="var(--amber)">Sleep</tspan> — Hotels
+            </text>
+          </svg>
         </h1>
         {/* RV parks keep their subtitle — it does real work explaining that
             these sit off the highway. Hotels don't need one; they sit at the
